@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+import { NextRequest, NextResponse } from 'next/server';
 import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
 
@@ -13,36 +13,28 @@ async function getGraphClient() {
   return Client.init({ authProvider: (done) => done(null, token.token) });
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  const { projectId, category, name } = req.body || {};
+export async function POST(request: NextRequest) {
+  const { projectId, category, name } = await request.json();
   if (!projectId || !category || !name) {
-    return res.status(400).json({ error: 'projectId, category, and name are required' });
+    return NextResponse.json({ error: 'projectId, category, and name are required' }, { status: 400 });
   }
-
   try {
     const client = await getGraphClient();
-    const site = await client
-      .api('/sites/adamass.sharepoint.com:/sites/VoxStudiosplatform')
-      .get();
+    const site = await client.api('/sites/adamass.sharepoint.com:/sites/VoxStudiosplatform').get();
     const drives = await client.api(`/sites/${site.id}/drives`).get();
     const driveId = drives?.value?.[0]?.id;
-    if (!driveId) return res.status(500).json({ error: 'No document library found on site' });
+    if (!driveId) return NextResponse.json({ error: 'No document library found on site' }, { status: 500 });
 
-    // Resolve item ID via path lookup
     const item = await client
       .api(`/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(projectId)}/${encodeURIComponent(category)}/${encodeURIComponent(name)}`)
       .get();
 
-    if (!item?.id) return res.status(404).json({ error: 'File not found' });
-
+    if (!item?.id) return NextResponse.json({ error: 'File not found' }, { status: 404 });
     await client.api(`/sites/${site.id}/drives/${driveId}/items/${item.id}`).delete();
-
-    return res.status(200).json({ success: true });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting file:', error);
-    return res.status(500).json({ error: 'Failed to delete file' });
+    return NextResponse.json({ error: 'Failed to delete file' }, { status: 500 });
   }
 }
 

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDownIcon, ChevronUpIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useProject } from '@/contexts/ProjectContext';
 
 type StepStatus = 'pending' | 'approved' | 'disapproved' | 'in_progress';
@@ -112,10 +112,9 @@ const initialStages: Stage[] = [
 ];
 
 export default function HomePage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { currentProject } = useProject();
-  const projectId = currentProject?.id || searchParams?.get('project');
+  const projectId = currentProject?.id;
   const [stages, setStages] = useState<Stage[]>(initialStages);
   const [expandedStages, setExpandedStages] = useState<number[]>([]);
   const [filesByCategory, setFilesByCategory] = useState<Record<string, { name: string; size: number; webUrl: string; mimeType?: string }[]>>({ videos: [], voices: [], documents: [] });

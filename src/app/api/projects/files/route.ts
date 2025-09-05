@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+import { NextRequest, NextResponse } from 'next/server';
 import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
 
@@ -13,29 +13,22 @@ async function getGraphClient() {
   return Client.init({ authProvider: (done) => done(null, token.token) });
 }
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const projectId = (req.query.projectId as string) || (req.body?.projectId as string);
-  if (!projectId) return res.status(400).json({ error: 'projectId is required' });
+export async function GET(request: NextRequest) {
+  const projectId = request.nextUrl.searchParams.get('projectId');
+  if (!projectId) return NextResponse.json({ error: 'projectId is required' }, { status: 400 });
 
   try {
     const client = await getGraphClient();
-    const site = await client
-      .api('/sites/adamass.sharepoint.com:/sites/VoxStudiosplatform')
-      .get();
+    const site = await client.api('/sites/adamass.sharepoint.com:/sites/VoxStudiosplatform').get();
     const drives = await client.api(`/sites/${site.id}/drives`).get();
     const driveId = drives?.value?.[0]?.id;
-    if (!driveId) return res.status(500).json({ error: 'No document library found on site' });
+    if (!driveId) return NextResponse.json({ error: 'No document library found on site' }, { status: 500 });
 
     const categories = ['videos', 'voices', 'documents'] as const;
-    const result: Record<string, Array<{ name: string; size: number; webUrl: string; mimeType?: string }>> = {
-      videos: [],
-      voices: [],
-      documents: []
-    };
+    const result: Record<string, Array<{ name: string; size: number; webUrl: string; mimeType?: string }>> = { videos: [], voices: [], documents: [] };
 
     for (const cat of categories) {
       try {
-        // Try to list the folder; if not found, skip
         const folderPath = `/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(projectId)}/${cat}`;
         const children = await client
           .api(`${folderPath}:/children`)
@@ -44,23 +37,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .get();
         const files = (children.value || [])
           .filter((item: any) => !!item.file)
-          .map((item: any) => ({
-            name: item.name,
-            size: item.size,
-            webUrl: item.webUrl,
-            mimeType: item.file?.mimeType
-          }));
+          .map((item: any) => ({ name: item.name, size: item.size, webUrl: item.webUrl, mimeType: item.file?.mimeType }));
         (result as any)[cat] = files;
-      } catch (e) {
-        // Folder might not exist; keep empty and continue
+      } catch {
         (result as any)[cat] = [];
       }
     }
 
-    return res.status(200).json({ success: true, files: result });
+    return NextResponse.json({ success: true, files: result });
   } catch (error) {
     console.error('Error listing project files:', error);
-    return res.status(500).json({ error: 'Failed to list project files' });
+    return NextResponse.json({ error: 'Failed to list project files' }, { status: 500 });
   }
 }
 
