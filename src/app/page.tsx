@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDownIcon, ChevronUpIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { useProject } from '@/contexts/ProjectContext';
 
 type StepStatus = 'pending' | 'approved' | 'disapproved' | 'in_progress';
 
@@ -110,11 +111,14 @@ const initialStages: Stage[] = [
   }
 ];
 
-function ProjectDashboard() {
+export default function HomePage() {
   const searchParams = useSearchParams();
-  const projectId = searchParams.get('project');
+  const router = useRouter();
+  const { currentProject } = useProject();
+  const projectId = currentProject?.id || searchParams?.get('project');
   const [stages, setStages] = useState<Stage[]>(initialStages);
   const [expandedStages, setExpandedStages] = useState<number[]>([]);
+  const [filesByCategory, setFilesByCategory] = useState<Record<string, { name: string; size: number; webUrl: string; mimeType?: string }[]>>({ videos: [], voices: [], documents: [] });
 
   const toggleStage = (stageId: number) => {
     setExpandedStages(prev => 
@@ -139,13 +143,56 @@ function ProjectDashboard() {
   const updateStepStatus = (stageId: number, stepIndex: number, newStatus: StepStatus) => {
     setStages(prevStages => {
       const newStages = [...prevStages];
-      const stage = {...newStages[stageId - 1]};
+      const stage = { ...newStages[stageId - 1] };
       stage.steps = [...stage.steps];
-      stage.steps[stepIndex] = {...stage.steps[stepIndex], status: newStatus};
+      stage.steps[stepIndex] = { ...stage.steps[stepIndex], status: newStatus };
       newStages[stageId - 1] = stage;
+
+      // Persist to Teams status.json
+      if (projectId) {
+        fetch(`/api/projects/status?projectId=${encodeURIComponent(projectId)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stages: newStages }),
+        }).catch((e) => console.error('Failed to save status:', e));
+      }
+
       return newStages;
     });
   };
+
+  // Load stages from Teams status.json
+  useEffect(() => {
+    if (!projectId) {
+      router.push('/projects');
+      return;
+    }
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/projects/status?projectId=${encodeURIComponent(projectId)}`);
+        const data = await res.json();
+        if (data?.stages) setStages(data.stages);
+      } catch (e) {
+        console.error('Failed to load status:', e);
+      }
+    };
+    load();
+  }, [projectId, router]);
+
+  // Load uploaded files per category from Teams
+  useEffect(() => {
+    if (!projectId) return;
+    const loadFiles = async () => {
+      try {
+        const res = await fetch(`/api/projects/files?projectId=${encodeURIComponent(projectId)}`);
+        const data = await res.json();
+        if (data?.files) setFilesByCategory(data.files);
+      } catch (e) {
+        console.error('Failed to load files:', e);
+      }
+    };
+    loadFiles();
+  }, [projectId]);
 
   const getStatusStyle = (status: StepStatus) => {
     switch (status) {
@@ -182,9 +229,6 @@ function ProjectDashboard() {
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
                       <h2 className="text-xl font-semibold text-gray-900">{stage.title}</h2>
-                      <span className={`ml-4 px-3 py-1 rounded-full text-sm font-medium ${getStatusStyle(stageStatus)}`}>
-                        {stageStatus.charAt(0).toUpperCase() + stageStatus.slice(1)}
-                      </span>
                     </div>
                     <div className="flex items-center gap-4">
                       <p className="text-gray-600">{stage.description}</p>
@@ -202,11 +246,16 @@ function ProjectDashboard() {
                       </div>
                     </div>
                   </div>
-                  {expandedStages.includes(stage.id) ? (
-                    <ChevronUpIcon className="w-5 h-5 text-gray-400" />
-                  ) : (
-                    <ChevronDownIcon className="w-5 h-5 text-gray-400" />
-                  )}
+                  <div className="flex items-center gap-2">
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyle(stageStatus)}`}>
+                      {stageStatus.charAt(0).toUpperCase() + stageStatus.slice(1)}
+                    </span>
+                    {expandedStages.includes(stage.id) ? (
+                      <ChevronUpIcon className="w-5 h-5 text-gray-400" />
+                    ) : (
+                      <ChevronDownIcon className="w-5 h-5 text-gray-400" />
+                    )}
+                  </div>
                 </button>
 
                 {expandedStages.includes(stage.id) && (
@@ -218,6 +267,24 @@ function ProjectDashboard() {
                             <div className="flex-1">
                               <h3 className="text-lg font-medium text-gray-900">{step.title}</h3>
                               <p className="mt-1 text-sm text-gray-600">{step.description}</p>
+                              {/* Uploaded assets indicator */}
+                              <div className="mt-3 flex flex-wrap gap-3 text-sm">
+                                {step.component === 'VideoUpload' && (
+                                  <div className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-700">
+                                    {filesByCategory.videos.length > 0 ? `${filesByCategory.videos.length} video(s) uploaded` : 'No videos yet'}
+                                  </div>
+                                )}
+                                {step.component?.toLowerCase().includes('voice') && (
+                                  <div className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-700">
+                                    {filesByCategory.voices.length > 0 ? `${filesByCategory.voices.length} audio file(s) uploaded` : 'No audio yet'}
+                                  </div>
+                                )}
+                                {step.component?.toLowerCase().includes('script') && (
+                                  <div className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-700">
+                                    {filesByCategory.documents.length > 0 ? `${filesByCategory.documents.length} document(s) uploaded` : 'No documents yet'}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             <div className="flex items-center gap-4">
                               <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyle(step.status)}`}>
@@ -254,18 +321,5 @@ function ProjectDashboard() {
         </div>
       </div>
     </div>
-  );
-}
-
-export default function HomePage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <h2 className="text-xl font-semibold text-gray-700">Loading dashboard...</h2>
-        <p className="mt-2 text-gray-500">Please wait while we load your project information.</p>
-      </div>
-    </div>}>
-      <ProjectDashboard />
-    </Suspense>
   );
 } 

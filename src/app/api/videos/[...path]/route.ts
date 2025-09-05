@@ -1,27 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readFile } from 'fs/promises';
+import { readFile, stat as statAsync } from 'fs/promises';
 import path from 'path';
 import { stat } from 'fs/promises';
 
-// Configure the API route to use Edge Runtime
-export const runtime = 'edge';
-export const dynamic = 'force-dynamic';
-
 export async function GET(
   request: NextRequest,
-  context: { params: { path: string[] } }
+  { params }: { params: { path: string[] } }
 ) {
   try {
-    const filePath = path.join(process.cwd(), 'public', 'uploads', ...context.params.path);
+    const filePath = path.join(process.cwd(), 'public', 'uploads', ...params.path);
 
     // Check if file exists and get its size
-    const stats = await stat(filePath);
+    const stats = await statAsync(filePath);
     if (!stats.isFile()) {
       return new NextResponse('Not found', { status: 404 });
     }
-
-    // Read the file
-    const fileBuffer = await readFile(filePath);
 
     // Determine content type based on file extension
     const ext = path.extname(filePath).toLowerCase();
@@ -39,7 +32,31 @@ export async function GET(
       // Add more video types as needed
     }
 
-    // Return the video file with appropriate headers
+    // Handle HTTP Range requests for streaming
+    const range = request.headers.get('range');
+    if (range) {
+      const match = range.match(/bytes=(\d+)-(\d*)/);
+      if (!match) {
+        return new NextResponse('Malformed range', { status: 416 });
+      }
+      const start = parseInt(match[1], 10);
+      const end = match[2] ? Math.min(parseInt(match[2], 10), stats.size - 1) : stats.size - 1;
+      if (isNaN(start) || isNaN(end) || start > end || start >= stats.size) {
+        return new NextResponse('Range Not Satisfiable', { status: 416 });
+      }
+
+      const chunk = await readFile(filePath, { encoding: 'binary' });
+      const buffer = Buffer.from(chunk, 'binary').subarray(start, end + 1);
+      const headers = new Headers();
+      headers.set('Content-Range', `bytes ${start}-${end}/${stats.size}`);
+      headers.set('Accept-Ranges', 'bytes');
+      headers.set('Content-Length', (end - start + 1).toString());
+      headers.set('Content-Type', contentType);
+      return new NextResponse(buffer, { status: 206, headers });
+    }
+
+    // No range header: send full file
+    const fileBuffer = await readFile(filePath);
     return new NextResponse(fileBuffer, {
       headers: {
         'Content-Type': contentType,

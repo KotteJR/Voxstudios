@@ -98,8 +98,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(ADMIN_CREDENTIALS.user);
         setIsAuthenticated(true);
         setIsAdmin(true);
-        Cookies.set('user', JSON.stringify(ADMIN_CREDENTIALS.user), { expires: 7 });
-        Cookies.set('isAuthenticated', 'true', { expires: 7 });
+        Cookies.set('user', JSON.stringify(ADMIN_CREDENTIALS.user), { expires: 7, path: '/', sameSite: 'lax' });
+        Cookies.set('isAuthenticated', 'true', { expires: 7, path: '/', sameSite: 'lax' });
         return;
       }
 
@@ -109,8 +109,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(demoUser.user);
         setIsAuthenticated(true);
         setIsAdmin(false);
-        Cookies.set('user', JSON.stringify(demoUser.user), { expires: 7 });
-        Cookies.set('isAuthenticated', 'true', { expires: 7 });
+        Cookies.set('user', JSON.stringify(demoUser.user), { expires: 7, path: '/', sameSite: 'lax' });
+        Cookies.set('isAuthenticated', 'true', { expires: 7, path: '/', sameSite: 'lax' });
         return;
       }
 

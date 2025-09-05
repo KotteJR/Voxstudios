@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useProject } from '@/contexts/ProjectContext';
 
 interface ScriptLine {
@@ -16,6 +16,7 @@ export default function ScriptUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [documents, setDocuments] = useState<Array<{ name: string; size: number; webUrl: string; mimeType?: string }>>([]);
   const [scriptLines, setScriptLines] = useState<ScriptLine[]>([
     { id: 1, text: '', timestamp: '00:00' },
     { id: 2, text: '', timestamp: '' },
@@ -96,6 +97,7 @@ export default function ScriptUpload() {
       }
       
       alert('Script uploaded successfully!');
+      await refreshDocuments();
     } catch (err) {
       console.error('Upload error:', err);
       setError(err instanceof Error ? err.message : 'Failed to upload script. Please try again.');
@@ -103,6 +105,39 @@ export default function ScriptUpload() {
       setIsUploading(false);
     }
   };
+
+  const refreshDocuments = async () => {
+    if (!currentProject) return;
+    try {
+      const res = await fetch(`/api/projects/files?projectId=${encodeURIComponent(currentProject.id)}`);
+      const data = await res.json();
+      if (data?.files?.documents) setDocuments(data.files.documents);
+    } catch (e) {
+      console.error('Failed to load documents:', e);
+    }
+  };
+
+  const handleDelete = async (name: string) => {
+    if (!currentProject) return;
+    if (!confirm(`Remove ${name}?`)) return;
+    try {
+      const res = await fetch('/api/projects/delete-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: currentProject.id, category: 'documents', name })
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      await refreshDocuments();
+    } catch (e) {
+      console.error('Delete error:', e);
+      alert('Failed to delete file');
+    }
+  };
+
+  useEffect(() => {
+    refreshDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProject?.id]);
 
   const handleLineChange = (id: number, field: 'text' | 'timestamp', value: string) => {
     setScriptLines(prevLines =>
@@ -347,6 +382,33 @@ export default function ScriptUpload() {
             >
               {isSubmitting ? 'Submitting...' : 'Submit'}
             </button>
+
+            {/* Uploaded Documents */}
+            <div className="mt-8">
+              <h2 className="text-lg font-semibold text-gray-900 mb-3">Uploaded Documents</h2>
+              {documents.length === 0 ? (
+                <p className="text-sm text-gray-500">No documents uploaded yet.</p>
+              ) : (
+                <ul className="divide-y divide-gray-200 border border-gray-200 rounded-lg">
+                  {documents.map((d) => (
+                    <li key={d.name} className="flex items-center justify-between px-4 py-3">
+                      <div className="min-w-0 mr-4">
+                        <a href={d.webUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline break-all">
+                          {d.name}
+                        </a>
+                        <div className="text-xs text-gray-500">{(d.size / (1024 * 1024)).toFixed(2)} MB</div>
+                      </div>
+                      <button
+                        onClick={() => handleDelete(d.name)}
+                        className="px-2 py-1 text-sm text-red-600 hover:text-red-800"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </>
         )}
       </div>

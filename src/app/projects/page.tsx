@@ -14,19 +14,7 @@ interface Project {
   createdAt: string;
 }
 
-// Sample projects for initial state
-const sampleProjects: Project[] = [
-  {
-    id: 'sample-1',
-    name: 'Marketing Campaign 2024',
-    createdAt: '2024-02-20'
-  },
-  {
-    id: 'sample-2',
-    name: 'Product Launch Video',
-    createdAt: '2024-02-18'
-  }
-];
+// No sample projects; list comes from Teams/SharePoint API
 
 export default function ProjectsPage() {
   const { user, isAuthenticated } = useAuth();
@@ -41,11 +29,6 @@ export default function ProjectsPage() {
     if (!isAuthenticated) {
       router.push('/login');
       return;
-    }
-
-    // If no projects are loaded yet, use sample projects
-    if (projects.length === 0 && !loading) {
-      setProjects(sampleProjects);
     }
   }, [isAuthenticated, router, projects, setProjects, loading]);
 

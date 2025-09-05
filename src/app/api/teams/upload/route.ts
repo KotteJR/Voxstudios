@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const accessToken = await session.accessToken;
     
     if (!accessToken) {
-      return NextResponse.json({ error: 'Access token not available' }, { status: 401 });
+      return NextResponse.json({ error: 'No access token available' }, { status: 401 });
     }
 
     // Initialize Microsoft Graph client

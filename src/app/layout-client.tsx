@@ -33,9 +33,10 @@ function SidebarContent() {
   const { logout, user, isAdmin } = useAuth();
   const pathname = usePathname();
   
-  // Debug log
-  console.log('Current user:', user);
-  console.log('Is admin:', isAdmin);
+  // Styles for white, minimal sidebar
+  const linkBase = 'flex items-center px-4 py-2.5 mb-1 rounded-lg text-sm font-medium transition-all duration-200';
+  const linkActive = 'bg-blue-50 text-blue-700 border border-blue-100';
+  const linkInactive = 'text-gray-700 hover:bg-gray-100 hover:text-gray-900';
 
   return (
     <>
@@ -59,13 +60,7 @@ function SidebarContent() {
             <Link
               key={item.name}
               href={item.href}
-              className={`
-                flex items-center px-4 py-2.5 mb-1 rounded-lg text-sm font-medium transition-all duration-200
-                ${isActive 
-                  ? 'bg-white/10 text-white' 
-                  : 'text-white/70 hover:bg-white/5 hover:text-white'
-                }
-              `}
+              className={`${linkBase} ${isActive ? linkActive : linkInactive}`}
             >
               <span className="mr-3">{item.icon}</span>
               {item.name}
@@ -76,7 +71,7 @@ function SidebarContent() {
         {/* Admin Navigation */}
         {isAdmin && (
           <>
-            <div className="px-4 py-2 mt-4 text-xs font-semibold text-white/50 uppercase tracking-wider">
+            <div className="px-4 py-2 mt-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
               Admin
             </div>
             {adminNavigation.map((item) => {
@@ -85,13 +80,7 @@ function SidebarContent() {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`
-                    flex items-center px-4 py-2.5 mb-1 rounded-lg text-sm font-medium transition-all duration-200
-                    ${isActive 
-                      ? 'bg-white/10 text-white' 
-                      : 'text-white/70 hover:bg-white/5 hover:text-white'
-                    }
-                  `}
+                  className={`${linkBase} ${isActive ? linkActive : linkInactive}`}
                 >
                   <span className="mr-3">{item.icon}</span>
                   {item.name}
@@ -109,14 +98,14 @@ function SidebarContent() {
             logout();
             window.location.href = '/login';
           }}
-          className="w-full flex items-center px-4 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:bg-white/5 hover:text-white transition-all duration-200"
+          className="w-full flex items-center px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-all duration-200 border border-transparent hover:border-gray-200"
         >
           <ArrowRightOnRectangleIcon className="w-5 h-5 mr-3" />
           Log Out
         </button>
         <Link
           href="/projects"
-          className="flex items-center px-4 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:bg-white/5 hover:text-white transition-all duration-200"
+          className="flex items-center px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-all duration-200 border border-transparent hover:border-gray-200"
         >
           <ArrowLeftIcon className="w-5 h-5 mr-3" />
           Back to Projects
@@ -140,13 +129,13 @@ export default function LayoutClient({
     <div className="flex h-screen">
       {showSidebar && (
         /* Primary Navigation */
-        <div className="w-80 bg-[#1a237e] text-white flex flex-col">
+        <div className="w-80 bg-white border-r border-gray-200 text-gray-900 flex flex-col">
           <SidebarContent />
         </div>
       )}
 
       {/* Main Content */}
-      <div className={`flex-1 bg-white overflow-hidden ${!showSidebar ? 'w-full' : ''}`}>
+      <div className={`flex-1 bg-gray-50 overflow-hidden ${!showSidebar ? 'w-full' : ''}`}>
         <div className="h-full overflow-auto p-6">
           {children}
         </div>

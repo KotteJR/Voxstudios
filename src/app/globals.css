@@ -39,13 +39,15 @@ body {
   margin-bottom: 2rem;
   display: flex;
   justify-content: center;
+  /* Ensure original logo colors (no inversion) */
+  filter: none;
 }
 
 .logo-container img {
   width: 200px;
   height: auto;
   object-fit: contain;
-  filter: brightness(0) invert(1); /* Makes the logo white */
+  /* Removed inversion to keep original (black) logo colors */
 }
 
 .nav-link {

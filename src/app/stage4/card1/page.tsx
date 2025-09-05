@@ -2,7 +2,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useProject } from '@/contexts/ProjectContext';
-import Image from 'next/image';
 
 interface Video {
   id: string;
@@ -13,7 +12,6 @@ interface Video {
 export default function FinalDeliverablePage() {
   const { currentProject } = useProject();
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [videos, setVideos] = useState<Video[]>([]);
   const [videoError, setVideoError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -40,30 +38,14 @@ export default function FinalDeliverablePage() {
 
   const handleVideoSelect = (video: Video) => {
     setSelectedVideo(video);
-    setIsPlaying(false);
     setVideoError(null);
     if (videoRef.current) {
       videoRef.current.load();
     }
   };
 
-  const handlePlayPause = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play().catch(error => {
-          console.error('Error playing video:', error);
-          setVideoError('Error playing video. Please try again.');
-        });
-      }
-      setIsPlaying(!isPlaying);
-    }
-  };
-
   const handleVideoError = () => {
     setVideoError('Error loading video. Please try again.');
-    setIsPlaying(false);
   };
 
   return (
@@ -103,108 +85,48 @@ export default function FinalDeliverablePage() {
             </div>
           </div>
 
-          {/* Retro TV Player */}
+          {/* Modern Player */}
           <div className="lg:col-span-2">
-            <div className="relative">
-              <div className="relative w-full max-w-2xl mx-auto">
-                {/* Video Screen - positioned behind the TV frame */}
-                <div className="absolute inset-0 z-10 flex items-center justify-center">
-                  <div className="w-[75%] h-[50%] mt-[10%] bg-black overflow-hidden">
-                    {selectedVideo ? (
-                      <>
-                        <video
-                          ref={videoRef}
-                          className="w-full h-full object-contain bg-black"
-                          src={selectedVideo.url}
-                          onClick={handlePlayPause}
-                          onError={handleVideoError}
-                          playsInline
-                        />
-                        {videoError && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75">
-                            <p className="text-red-500 text-center px-4">{videoError}</p>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-black">
-                        <p className="text-gray-500 text-lg">Select a video to play</p>
-                      </div>
-                    )}
-
-                    {/* Scanlines Effect */}
-                    <div className="absolute inset-0 pointer-events-none bg-scanlines opacity-5"></div>
-
-                    {/* TV Glare */}
-                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/5 via-transparent to-transparent"></div>
-                  </div>
-                </div>
-
-                {/* TV Frame Image */}
-                <div className="relative z-20">
-                  <Image
-                    src="/retro-tv.png"
-                    alt="Retro TV Frame"
-                    width={800}
-                    height={600}
-                    className="w-full h-auto"
-                    priority
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+              <div className="aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center">
+                {selectedVideo ? (
+                  <video
+                    ref={videoRef}
+                    className="w-full h-full object-contain"
+                    src={selectedVideo.url}
+                    controls
+                    playsInline
+                    onError={handleVideoError}
                   />
-                </div>
-
-                {/* Play/Pause Button */}
-                <div className="mt-8 flex justify-center relative z-30">
-                  <button
-                    onClick={handlePlayPause}
-                    disabled={!selectedVideo || !!videoError}
-                    className="px-6 py-2 bg-[#8B4513] text-white rounded-lg shadow hover:bg-[#654321] disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                  >
-                    {isPlaying ? (
-                      <>
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                        </svg>
-                        <span>Pause</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                        <span>Play</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+                ) : (
+                  <div className="text-gray-400 text-lg">Select a video to play</div>
+                )}
               </div>
+              <div className="mt-4 flex items-center justify-between">
+                <div className="text-sm text-gray-700 truncate">
+                  {selectedVideo ? selectedVideo.title : 'No video selected'}
+                </div>
+                {selectedVideo && (
+                  <div className="space-x-2">
+                    <a
+                      href={selectedVideo.url}
+                      download
+                      className="px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    >
+                      Download
+                    </a>
+                  </div>
+                )}
+              </div>
+              {videoError && (
+                <div className="mt-2 text-sm text-red-600">{videoError}</div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Scanlines Animation */}
-      <style jsx>{`
-        @keyframes scanlines {
-          0% {
-            background-position: 0 0;
-          }
-          100% {
-            background-position: 0 100%;
-          }
-        }
-
-        .bg-scanlines {
-          background: repeating-linear-gradient(
-            0deg,
-            rgba(255, 255, 255, 0.1),
-            rgba(255, 255, 255, 0.1) 1px,
-            transparent 1px,
-            transparent 2px
-          );
-          background-size: 100% 4px;
-          animation: scanlines 10s linear infinite;
-        }
-      `}</style>
+      
     </div>
   );
 } 

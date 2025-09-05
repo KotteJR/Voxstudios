@@ -62,7 +62,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   // Update cookie when current project changes
   useEffect(() => {
     if (currentProject) {
-      Cookies.set('selectedProject', JSON.stringify(currentProject), { expires: 7 });
+      Cookies.set('selectedProject', JSON.stringify(currentProject), { expires: 7, path: '/', sameSite: 'lax' });
     } else {
       Cookies.remove('selectedProject');
     }

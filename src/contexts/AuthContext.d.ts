@@ -1,15 +1,20 @@
 import { ReactNode } from 'react';
 
 export interface User {
-  username: string;
-  role: 'admin' | 'client';
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
 }
 
 export interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => Promise<void>;
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  isLoading: boolean;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }): JSX.Element;
-export function useAuth(): AuthContextType; 
+export function useAuth(): AuthContextType;

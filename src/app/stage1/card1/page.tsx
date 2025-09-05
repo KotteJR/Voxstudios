@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useProject } from '@/contexts/ProjectContext';
 
 export default function VideoUpload() {
@@ -8,6 +8,7 @@ export default function VideoUpload() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploaded, setUploaded] = useState<Array<{ name: string; size: number; webUrl: string; mimeType?: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { currentProject } = useProject();
 
@@ -73,6 +74,8 @@ export default function VideoUpload() {
       }
       
       alert('Upload completed successfully!');
+      // Refresh list
+      await refreshList();
     } catch (err) {
       console.error('Upload error:', err);
       setError(err instanceof Error ? err.message : 'Failed to upload video. Please try again.');
@@ -81,6 +84,39 @@ export default function VideoUpload() {
       setProgress(100);
     }
   };
+
+  const refreshList = async () => {
+    if (!currentProject) return;
+    try {
+      const res = await fetch(`/api/projects/files?projectId=${encodeURIComponent(currentProject.id)}`);
+      const data = await res.json();
+      if (data?.files?.videos) setUploaded(data.files.videos);
+    } catch (e) {
+      console.error('Failed to load video list:', e);
+    }
+  };
+
+  const handleDelete = async (name: string) => {
+    if (!currentProject) return;
+    if (!confirm(`Remove ${name}?`)) return;
+    try {
+      const res = await fetch('/api/projects/delete-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: currentProject.id, category: 'videos', name })
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      await refreshList();
+    } catch (e) {
+      console.error('Delete error:', e);
+      alert('Failed to delete file');
+    }
+  };
+
+  useEffect(() => {
+    refreshList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProject?.id]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -150,6 +186,33 @@ export default function VideoUpload() {
         >
           {isUploading ? `Uploading... ${progress}%` : 'Upload Video'}
         </button>
+
+        {/* Uploaded videos list */}
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">Uploaded Videos</h2>
+          {uploaded.length === 0 ? (
+            <p className="text-sm text-gray-500">No videos uploaded yet.</p>
+          ) : (
+            <ul className="divide-y divide-gray-200 border border-gray-200 rounded-lg">
+              {uploaded.map((v) => (
+                <li key={v.name} className="flex items-center justify-between px-4 py-3">
+                  <div className="min-w-0 mr-4">
+                    <a href={v.webUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline break-all">
+                      {v.name}
+                    </a>
+                    <div className="text-xs text-gray-500">{(v.size / (1024 * 1024)).toFixed(2)} MB</div>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(v.name)}
+                    className="px-2 py-1 text-sm text-red-600 hover:text-red-800"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
