@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProject } from '@/contexts/ProjectContext';
@@ -58,6 +59,10 @@ export default function ProjectsPage() {
   };
 
   const handleProjectSelect = (project: Project) => {
+    // Persist cookie immediately so middleware sees it on navigation
+    try {
+      Cookies.set('selectedProject', JSON.stringify(project), { expires: 7, path: '/', sameSite: 'lax' });
+    } catch {}
     setCurrentProject(project);
     router.push('/');
   };

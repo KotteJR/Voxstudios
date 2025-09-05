@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserGroupIcon, TrashIcon, PencilIcon } from '@heroicons/react/24/outline';
 
@@ -14,24 +14,26 @@ interface User {
 
 export default function AdminManagement() {
   const { user } = useAuth();
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@example.com',
-      role: 'admin',
-      lastLogin: '2024-03-20T10:00:00Z'
-    },
-    {
-      id: '2',
-      name: 'Jane Smith',
-      email: 'jane@example.com',
-      role: 'user',
-      lastLogin: '2024-03-19T15:30:00Z'
-    }
-  ]);
+  const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const res = await fetch('/api/admin/users');
+        const data = await res.json();
+        if (data?.users) setUsers(data.users);
+      } catch (e) {
+        setError('Failed to load users');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUsers();
+  }, []);
 
   const handleEditUser = (user: User) => {
     setSelectedUser(user);
@@ -41,8 +43,9 @@ export default function AdminManagement() {
   const handleDeleteUser = async (userId: string) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
-        // TODO: Implement actual API call to delete user
-        setUsers(users.filter(u => u.id !== userId));
+        const res = await fetch(`/api/admin/users?id=${encodeURIComponent(userId)}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('delete failed');
+        setUsers(prev => prev.filter(u => u.id !== userId));
       } catch (error) {
         console.error('Failed to delete user:', error);
       }
@@ -133,11 +136,32 @@ export default function AdminManagement() {
             <h2 className="text-xl font-semibold mb-4">
               {selectedUser ? 'Edit User' : 'Add New User'}
             </h2>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
-              // TODO: Implement form submission
-              setIsEditing(false);
-              setSelectedUser(null);
+              const form = e.currentTarget as HTMLFormElement;
+              const formData = new FormData(form);
+              const payload = {
+                name: formData.get('name'),
+                email: formData.get('email'),
+                role: formData.get('role'),
+              } as any;
+              try {
+                if (selectedUser) {
+                  const res = await fetch('/api/admin/users', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedUser.id, name: payload.name, role: payload.role }) });
+                  if (!res.ok) throw new Error('update failed');
+                  const { user } = await res.json();
+                  setUsers(prev => prev.map(u => u.id === user.id ? { ...u, name: user.user_metadata?.name || u.name, role: user.user_metadata?.role || u.role } : u));
+                } else {
+                  const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: payload.email, password: crypto.randomUUID(), name: payload.name, role: payload.role }) });
+                  if (!res.ok) throw new Error('create failed');
+                  const { user } = await res.json();
+                  setUsers(prev => [...prev, { id: user.id, email: user.email, name: user.user_metadata?.name || user.email, role: user.user_metadata?.role || 'user', lastLogin: user.created_at }]);
+                }
+                setIsEditing(false);
+                setSelectedUser(null);
+              } catch (err) {
+                alert('Operation failed');
+              }
             }}>
               <div className="space-y-4">
                 <div>
@@ -147,6 +171,7 @@ export default function AdminManagement() {
                   <input
                     type="text"
                     id="name"
+                    name="name"
                     defaultValue={selectedUser?.name}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -158,6 +183,7 @@ export default function AdminManagement() {
                   <input
                     type="email"
                     id="email"
+                    name="email"
                     defaultValue={selectedUser?.email}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -168,6 +194,7 @@ export default function AdminManagement() {
                   </label>
                   <select
                     id="role"
+                    name="role"
                     defaultValue={selectedUser?.role || 'user'}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   >

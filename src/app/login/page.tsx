@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
+import logo from '@/../public/images/logo.png';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -47,12 +48,13 @@ export default function LoginPage() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <Image
-            src="/images/logo.png"
+            src={logo}
             alt="Vox Studios"
             width={200}
             height={60}
             className="logo-container"
             priority
+            style={{ filter: 'none' }}
           />
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
