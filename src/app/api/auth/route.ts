@@ -9,7 +9,17 @@ export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
     if (!email || !password) return NextResponse.json({ error: 'email and password required' }, { status: 400 });
-    await ensureUsersTable();
+    
+    // Check if database is configured
+    try {
+      await ensureUsersTable();
+    } catch (dbError) {
+      if (dbError instanceof Error && dbError.message.includes('Database is not configured')) {
+        return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
+      }
+      throw dbError;
+    }
+    
     const { rows } = await sql`SELECT id, name, email, role, password_hash FROM users WHERE email=${email}`;
     const user = rows[0];
     if (!user || !user.password_hash) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });

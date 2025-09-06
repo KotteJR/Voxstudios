@@ -25,6 +25,14 @@ export async function ensureUsersTable() {
       last_login timestamptz
     );
   `;
+  
+  // Add password_hash column if it doesn't exist (for existing tables)
+  try {
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;`;
+  } catch (error) {
+    // Column might already exist, ignore error
+    console.log('password_hash column already exists or error adding it:', error);
+  }
 }
 
 export type DbUser = {

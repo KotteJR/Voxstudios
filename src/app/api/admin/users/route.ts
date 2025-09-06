@@ -15,6 +15,10 @@ export async function GET() {
     return NextResponse.json({ users });
   } catch (error) {
     console.error('GET /api/admin/users error:', error);
+    // Return empty array if database is not configured
+    if (error instanceof Error && error.message.includes('Database is not configured')) {
+      return NextResponse.json({ users: [] });
+    }
     const message = error instanceof Error ? error.message : 'Failed to list users';
     return NextResponse.json({ error: message }, { status: 500 });
   }
