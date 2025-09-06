@@ -48,13 +48,17 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { id, name, role, password } = body;
     await ensureUsersTable();
-    let passwordHashPart = sql``;
+    
+    let query;
     if (password) {
       const salt = await bcrypt.genSalt(10);
       const hash = await bcrypt.hash(password, salt);
-      passwordHashPart = sql`, password_hash=${hash}`;
+      query = sql`UPDATE users SET name=${name}, role=${role}, password_hash=${hash} WHERE id=${id} RETURNING id, name, email, role, last_login`;
+    } else {
+      query = sql`UPDATE users SET name=${name}, role=${role} WHERE id=${id} RETURNING id, name, email, role, last_login`;
     }
-    const { rows } = await sql`UPDATE users SET name=${name}, role=${role}${password ? sql.raw(', password_hash=' + (await bcrypt.hash(password, await bcrypt.genSalt(10)))) : sql``} WHERE id=${id} RETURNING id, name, email, role, last_login`;
+    
+    const { rows } = await query;
     return NextResponse.json({ user: rows[0] });
   } catch (error) {
     console.error('PUT /api/admin/users error:', error);
