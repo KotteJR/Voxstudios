@@ -111,7 +111,7 @@ export default function LoginPage() {
       <div className="relative hidden md:block">
         <div className="absolute inset-0 bg-white" />
         <div className="relative z-10 flex h-full items-center justify-center">
-          <Image src={logo} alt="Vox Studios" width={340} height={106} priority />
+          <Image src={logo} alt="Vox Studios" width={340} height={106} priority className="invert" />
         </div>
       </div>
     </div>
