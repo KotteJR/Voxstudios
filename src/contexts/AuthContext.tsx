@@ -22,41 +22,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Special admin credentials - in production, this should be in a secure database
-const ADMIN_CREDENTIALS = {
-  email: 'admintest',
-  password: 'demotest',
-  user: {
-    id: 'admin-1',
-    name: 'Admin User',
-    email: 'admintest',
-    role: 'admin' as const,
-  },
-};
-
-// Demo user credentials - in production, this should be in a secure database
-const DEMO_USERS = [
-  {
-    email: 'user1',
-    password: 'password1',
-    user: {
-      id: 'user-1',
-      name: 'Demo User 1',
-      email: 'user1',
-      role: 'user' as const,
-    },
-  },
-  {
-    email: 'user2',
-    password: 'password2',
-    user: {
-      id: 'user-2',
-      name: 'Demo User 2',
-      email: 'user2',
-      role: 'user' as const,
-    },
-  },
-];
+// Keep a single hardcoded backdoor admin for bootstrapping if DB is empty
+const BOOTSTRAP_ADMIN = { email: 'admintest', password: 'demotest' };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -93,28 +60,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Check for admin credentials
-      if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
-        setUser(ADMIN_CREDENTIALS.user);
+      // Try server-side auth first
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      if (res.ok) {
+        const { user } = await res.json();
+        setUser(user);
+        setIsAuthenticated(true);
+        setIsAdmin(user.role === 'admin');
+        Cookies.set('user', JSON.stringify(user), { expires: 7, path: '/', sameSite: 'lax' });
+        Cookies.set('isAuthenticated', 'true', { expires: 7, path: '/', sameSite: 'lax' });
+        return;
+      }
+
+      // Fallback bootstrap admin
+      if (email === BOOTSTRAP_ADMIN.email && password === BOOTSTRAP_ADMIN.password) {
+        const bootstrapUser = { id: 'bootstrap-admin', name: 'Admin', email, role: 'admin' as const };
+        setUser(bootstrapUser);
         setIsAuthenticated(true);
         setIsAdmin(true);
-        Cookies.set('user', JSON.stringify(ADMIN_CREDENTIALS.user), { expires: 7, path: '/', sameSite: 'lax' });
+        Cookies.set('user', JSON.stringify(bootstrapUser), { expires: 7, path: '/', sameSite: 'lax' });
         Cookies.set('isAuthenticated', 'true', { expires: 7, path: '/', sameSite: 'lax' });
         return;
       }
 
-      // Check for demo user credentials
-      const demoUser = DEMO_USERS.find(u => u.email === email && u.password === password);
-      if (demoUser) {
-        setUser(demoUser.user);
-        setIsAuthenticated(true);
-        setIsAdmin(false);
-        Cookies.set('user', JSON.stringify(demoUser.user), { expires: 7, path: '/', sameSite: 'lax' });
-        Cookies.set('isAuthenticated', 'true', { expires: 7, path: '/', sameSite: 'lax' });
-        return;
-      }
-
-      // If no matching credentials found
       throw new Error('Invalid credentials');
     } catch (error) {
       console.error('Login error:', error);

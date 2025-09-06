@@ -20,6 +20,7 @@ export async function ensureUsersTable() {
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       name text NOT NULL,
       email text UNIQUE NOT NULL,
+      password_hash text,
       role text NOT NULL DEFAULT 'user',
       last_login timestamptz
     );

@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
+import * as bcrypt from 'bcryptjs';
 import { ensureUsersTable } from '@/lib/db';
+import { seedAdmin } from './seed';
 
 export const runtime = 'nodejs';
 
 export async function GET() {
   try {
     await ensureUsersTable();
+    await seedAdmin();
     const { rows } = await sql`SELECT id, name, email, role, last_login FROM users ORDER BY name ASC`;
     const users = rows.map((r: any) => ({ id: r.id, name: r.name, email: r.email, role: r.role, lastLogin: r.last_login }));
     return NextResponse.json({ users });
@@ -20,11 +23,16 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, name, role } = body;
+    const { email, name, role, password } = body;
     await ensureUsersTable();
+    let passwordHash: string | null = null;
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      passwordHash = await bcrypt.hash(password, salt);
+    }
     const { rows } = await sql`
-      INSERT INTO users (name, email, role) VALUES (${name}, ${email}, ${role || 'user'})
-      ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, role = EXCLUDED.role
+      INSERT INTO users (name, email, role, password_hash) VALUES (${name}, ${email}, ${role || 'user'}, ${passwordHash})
+      ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, role = EXCLUDED.role, password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash)
       RETURNING id, name, email, role, last_login
     `;
     return NextResponse.json({ user: rows[0] });
@@ -38,9 +46,15 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, name, role } = body;
+    const { id, name, role, password } = body;
     await ensureUsersTable();
-    const { rows } = await sql`UPDATE users SET name=${name}, role=${role} WHERE id=${id} RETURNING id, name, email, role, last_login`;
+    let passwordHashPart = sql``;
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      const hash = await bcrypt.hash(password, salt);
+      passwordHashPart = sql`, password_hash=${hash}`;
+    }
+    const { rows } = await sql`UPDATE users SET name=${name}, role=${role}${password ? sql.raw(', password_hash=' + (await bcrypt.hash(password, await bcrypt.genSalt(10)))) : sql``} WHERE id=${id} RETURNING id, name, email, role, last_login`;
     return NextResponse.json({ user: rows[0] });
   } catch (error) {
     console.error('PUT /api/admin/users error:', error);

@@ -144,15 +144,16 @@ export default function AdminManagement() {
                 name: formData.get('name'),
                 email: formData.get('email'),
                 role: formData.get('role'),
+                password: formData.get('password') || undefined,
               } as any;
               try {
                 if (selectedUser) {
-                  const res = await fetch('/api/admin/users', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedUser.id, name: payload.name, role: payload.role }) });
+                  const res = await fetch('/api/admin/users', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: selectedUser.id, name: payload.name, role: payload.role, password: payload.password }) });
                   if (!res.ok) throw new Error('update failed');
                   const { user } = await res.json();
                   setUsers(prev => prev.map(u => u.id === user.id ? { ...u, name: user.user_metadata?.name || u.name, role: user.user_metadata?.role || u.role } : u));
                 } else {
-                  const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: payload.email, password: crypto.randomUUID(), name: payload.name, role: payload.role }) });
+                  const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: payload.email, password: payload.password, name: payload.name, role: payload.role }) });
                   if (!res.ok) throw new Error('create failed');
                   const { user } = await res.json();
                   setUsers(prev => [...prev, { id: user.id, email: user.email, name: user.user_metadata?.name || user.email, role: user.user_metadata?.role || 'user', lastLogin: user.created_at }]);
@@ -201,6 +202,18 @@ export default function AdminManagement() {
                     <option value="user">User</option>
                     <option value="admin">Admin</option>
                   </select>
+                </div>
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                    Password {selectedUser ? <span className="text-gray-400">(leave blank to keep)</span> : null}
+                  </label>
+                  <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    placeholder={selectedUser ? '••••••••' : 'Set initial password'}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
                 </div>
               </div>
               <div className="mt-6 flex justify-end space-x-3">
