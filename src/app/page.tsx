@@ -206,6 +206,10 @@ export default function HomePage() {
     }
   };
 
+  const formatStatus = (status: StepStatus) => {
+    return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -247,7 +251,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyle(stageStatus)}`}>
-                      {stageStatus.charAt(0).toUpperCase() + stageStatus.slice(1)}
+                      {formatStatus(stageStatus)}
                     </span>
                     {expandedStages.includes(stage.id) ? (
                       <ChevronUpIcon className="w-5 h-5 text-gray-400" />
@@ -287,7 +291,7 @@ export default function HomePage() {
                             </div>
                             <div className="flex items-center gap-4">
                               <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyle(step.status)}`}>
-                                {step.status.charAt(0).toUpperCase() + step.status.slice(1)}
+                                {formatStatus(step.status)}
                               </span>
                               <div className="flex gap-2">
                                 <button

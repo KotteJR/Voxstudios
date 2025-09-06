@@ -20,6 +20,7 @@ body {
   background: var(--background-color);
   color: var(--text-color);
   min-height: 100vh;
+  overflow: hidden; /* Prevent stray scrollbars causing white gutters */
 }
 
 /* Sidebar */

@@ -88,7 +88,16 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { projectId, stages } = await request.json();
+  const url = new URL(request.url);
+  const queryProjectId = url.searchParams.get('projectId');
+  let body: any = {};
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
+  }
+  const projectId = body.projectId || queryProjectId;
+  const stages = body.stages;
   if (!projectId || !stages) {
     return NextResponse.json({ error: 'projectId and stages are required' }, { status: 400 });
   }

@@ -15,7 +15,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for authentication
+  // Cookie-based demo auth used by the app
   const isAuthenticated = request.cookies.get('isAuthenticated')?.value === 'true';
   const user = request.cookies.get('user')?.value;
   const selectedProject = request.cookies.get('selectedProject')?.value;
@@ -26,7 +26,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // For admin routes, check if user is admin
+  // For admin routes, check role from cookie
   if (pathname.startsWith('/admin')) {
     try {
       const userData = JSON.parse(user);

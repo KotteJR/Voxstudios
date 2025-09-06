@@ -125,6 +125,11 @@ export default function LayoutClient({
   const isProjectsPage = pathname === '/projects';
   const showSidebar = !isLoginPage && !isProjectsPage;
 
+  if (isLoginPage) {
+    // Render login page without any outer padding/background wrappers
+    return <>{children}</>;
+  }
+
   return (
     <div className="flex h-screen">
       {showSidebar && (
