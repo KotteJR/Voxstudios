@@ -310,14 +310,19 @@ export default function AdminDashboard() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to upload video');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Upload failed:', response.status, errorData);
+        throw new Error(errorData.error || `Upload failed with status ${response.status}`);
       }
 
+      const result = await response.json();
+      console.log('Upload successful:', result);
       setUploadSuccess(true);
       setVideoDetails(prev => ({ ...prev, title: '' }));
     } catch (error) {
       console.error('Upload error:', error);
-      setUploadError('Failed to upload video. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload video. Please try again.';
+      setUploadError(errorMessage);
     } finally {
       setIsUploading(false);
     }

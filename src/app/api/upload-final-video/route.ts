@@ -46,26 +46,44 @@ export async function POST(req: NextRequest) {
       
       // Fallback to local file system for development
       try {
+        console.log('Setting up local file system paths...');
         const publicUploadsPath = path.join(process.cwd(), 'public', 'uploads');
         const projectPath = path.join(publicUploadsPath, projectId);
         const stage4Path = path.join(projectPath, 'stage4');
         const finalVideosPath = path.join(stage4Path, 'final-videos');
         
+        console.log('Paths:', {
+          publicUploadsPath,
+          projectPath,
+          stage4Path,
+          finalVideosPath
+        });
+        
         try {
+          console.log('Creating directories...');
           await mkdir(finalVideosPath, { recursive: true });
+          console.log('Directories created successfully');
         } catch (error) {
           console.error('Error creating directories:', error);
+          throw error;
         }
 
         // Generate file path and URL
         const filePath = path.join(finalVideosPath, fileName);
         const publicUrl = `/uploads/${projectId}/stage4/final-videos/${encodeURIComponent(fileName)}`;
+        
+        console.log('File paths:', { filePath, publicUrl });
 
         // Convert File to Buffer and save it
+        console.log('Converting file to buffer...');
         const arrayBuffer = await file.arrayBuffer();
+        console.log('Array buffer size:', arrayBuffer.byteLength);
+        
         const buffer = Buffer.from(arrayBuffer);
+        console.log('Buffer size:', buffer.length);
+        
+        console.log('Writing file to disk...');
         await writeFile(filePath, buffer);
-
         console.log('Video saved locally to:', filePath);
 
         return NextResponse.json({
@@ -78,10 +96,12 @@ export async function POST(req: NextRequest) {
         });
       } catch (error) {
         console.error('Error saving video locally:', error);
+        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
         return NextResponse.json(
           { 
             error: 'Failed to save video locally',
-            details: error instanceof Error ? error.message : 'Unknown error'
+            details: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined
           },
           { status: 500 }
         );

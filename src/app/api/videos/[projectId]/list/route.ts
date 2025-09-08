@@ -40,8 +40,37 @@ export async function GET(
       // Fallback to local file system for development
       try {
         const publicUploadsPath = path.join(process.cwd(), 'public', 'uploads');
-        const videosPath = path.join(publicUploadsPath, projectId, 'stage4', 'final-videos');
+        
+        // Try new structure first: {projectId}/stage4/final-videos
+        let videosPath = path.join(publicUploadsPath, projectId, 'stage4', 'final-videos');
+        let videoUrlPrefix = `/uploads/${projectId}/stage4/final-videos`;
+        
+        try {
+          const files = await readdir(videosPath);
+          const videos = files.filter(file => {
+            const ext = path.extname(file).toLowerCase();
+            return ['.mp4', '.webm', '.mov', '.avi', '.mkv'].includes(ext);
+          });
 
+          if (videos.length > 0) {
+            return NextResponse.json({
+              success: true,
+              videos: videos.map(name => ({
+                name,
+                url: `${videoUrlPrefix}/${encodeURIComponent(name)}`,
+                webUrl: `${videoUrlPrefix}/${encodeURIComponent(name)}`,
+                size: 0 // Local files don't have size info easily available
+              }))
+            });
+          }
+        } catch (error) {
+          console.log('New structure not found, trying old structure...');
+        }
+        
+        // Fallback to old structure: {projectId}/final-videos
+        videosPath = path.join(publicUploadsPath, projectId, 'final-videos');
+        videoUrlPrefix = `/uploads/${projectId}/final-videos`;
+        
         const files = await readdir(videosPath);
         const videos = files.filter(file => {
           const ext = path.extname(file).toLowerCase();
@@ -52,8 +81,8 @@ export async function GET(
           success: true,
           videos: videos.map(name => ({
             name,
-            url: `/uploads/${projectId}/stage4/final-videos/${encodeURIComponent(name)}`,
-            webUrl: `/uploads/${projectId}/stage4/final-videos/${encodeURIComponent(name)}`,
+            url: `${videoUrlPrefix}/${encodeURIComponent(name)}`,
+            webUrl: `${videoUrlPrefix}/${encodeURIComponent(name)}`,
             size: 0 // Local files don't have size info easily available
           }))
         });
