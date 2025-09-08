@@ -17,12 +17,16 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const projectName = formData.get('projectName') as string;
+    const folderName = formData.get('folderName') as string;
+    const stage = formData.get('stage') as string;
     
     console.log('Received upload request:', {
       fileName: file?.name,
       fileType: file?.type,
       fileSize: file?.size,
-      projectName
+      projectName,
+      stage,
+      folderName
     });
 
     if (!file) {
@@ -87,14 +91,38 @@ export async function POST(request: NextRequest) {
       const drive = await client.api(`/sites/${site.id}/drives`)
         .get();
 
-      // Create folder structure for different file types
+      // Create folder structure based on stage and file type
       let folderPath = projectName;
-      if (file.type.startsWith('audio/')) {
-        folderPath += '/voices';
-      } else if (file.type.startsWith('video/')) {
-        folderPath += '/videos';
-      } else if (file.type.startsWith('text/') || allowedApplicationTypes.includes(file.type)) {
-        folderPath += '/documents';
+      
+      if (stage) {
+        // Use stage-based folder structure
+        folderPath += `/${stage}`;
+        
+        if (folderName) {
+          // Use custom folder name within the stage
+          folderPath += `/${folderName}`;
+        } else {
+          // Determine subfolder based on file type
+          if (file.type.startsWith('audio/')) {
+            folderPath += '/voices';
+          } else if (file.type.startsWith('video/')) {
+            folderPath += '/videos';
+          } else if (file.type.startsWith('text/') || allowedApplicationTypes.includes(file.type)) {
+            folderPath += '/documents';
+          }
+        }
+      } else if (folderName) {
+        // Legacy: Use custom folder name if provided (for backward compatibility)
+        folderPath += `/${folderName}`;
+      } else {
+        // Legacy: Use file type-based folders (for backward compatibility)
+        if (file.type.startsWith('audio/')) {
+          folderPath += '/voices';
+        } else if (file.type.startsWith('video/')) {
+          folderPath += '/videos';
+        } else if (file.type.startsWith('text/') || allowedApplicationTypes.includes(file.type)) {
+          folderPath += '/documents';
+        }
       }
 
       // Get the project folder path
@@ -113,7 +141,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ 
         success: true,
         message: `File uploaded successfully to project folder: ${projectFolderPath}`,
-        fileUrl: response.webUrl
+        fileUrl: response.webUrl,
+        filePath: projectFolderPath,
+        siteId: site.id,
+        driveId: drive.value[0].id
       });
 
     } catch (err) {

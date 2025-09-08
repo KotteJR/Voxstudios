@@ -16,7 +16,7 @@ interface Voice {
   title: string;
   description: string;
   tags: string[];
-  audioData: string;
+  audioUrl?: string;
   type: 'base' | 'custom';
   uploadDate: string;
   projectId?: string;
@@ -51,6 +51,11 @@ export default function FeedbackSessionPage() {
       });
       audioRef.current.addEventListener('ended', () => {
         setIsPlaying(false);
+      });
+      audioRef.current.addEventListener('error', (e) => {
+        console.error('Audio error:', e);
+        setIsPlaying(false);
+        alert('Failed to load audio. The file may need to be re-uploaded. Please try uploading the voice again from the admin panel.');
       });
     }
 
@@ -108,13 +113,46 @@ export default function FeedbackSessionPage() {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const handleVoiceSelect = (voice: Voice) => {
+  const handleVoiceSelect = async (voice: Voice) => {
     setSelectedVoice(voice);
-    setFeedback([]);
     setCurrentTime(0);
     setIsPlaying(false);
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
+    }
+    
+    // Load existing feedback for this voice
+    await loadFeedbackForVoice(voice);
+  };
+
+  const loadFeedbackForVoice = async (voice: Voice) => {
+    if (!currentProject) return;
+    
+    try {
+      console.log('Loading feedback for voice:', voice.title, 'in project:', currentProject.id);
+      const response = await fetch(
+        `/api/projects/feedback?projectId=${encodeURIComponent(currentProject.id)}&voiceTitle=${encodeURIComponent(voice.title)}`
+      );
+      
+      console.log('Feedback API response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Feedback API response data:', data);
+        if (data.success && data.feedback) {
+          console.log('Setting feedback:', data.feedback);
+          setFeedback(data.feedback);
+        } else {
+          console.log('No feedback found or API returned success: false');
+          setFeedback([]);
+        }
+      } else {
+        console.error('Failed to load feedback, status:', response.status);
+        setFeedback([]);
+      }
+    } catch (error) {
+      console.error('Error loading feedback:', error);
+      setFeedback([]);
     }
   };
 
@@ -141,10 +179,11 @@ Feedback Comments:
 ${sortedFeedback.map(fb => `[${formatTime(fb.timestamp)}] ${fb.comment} ${fb.resolved ? '(Resolved)' : '(Pending)'}`).join('\n')}
 `;
 
-      // Create a text file with the feedback
+      // Create a text file with the feedback (include timestamp to avoid overwriting)
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const file = new File(
         [reportContent], 
-        `feedback_${currentProject.name}_${selectedVoice.title}_${new Date().toISOString().split('T')[0]}.txt`,
+        `feedback_${currentProject.name}_${selectedVoice.title}_${timestamp}.txt`,
         { type: 'text/plain' }
       );
 
@@ -152,7 +191,8 @@ ${sortedFeedback.map(fb => `[${formatTime(fb.timestamp)}] ${fb.comment} ${fb.res
       const formData = new FormData();
       formData.append('file', file);
       formData.append('projectName', currentProject.name);
-      formData.append('folderName', 'voice-feedback');
+      formData.append('stage', 'stage3');
+      formData.append('folderName', 'feedback');
 
       // Upload the feedback file to Teams
       const response = await fetch('/api/upload', {
@@ -349,7 +389,7 @@ ${sortedFeedback.map(fb => `[${formatTime(fb.timestamp)}] ${fb.comment} ${fb.res
           </div>
         </div>
 
-        <audio ref={audioRef} src={selectedVoice?.audioData} className="hidden" />
+        <audio ref={audioRef} src={selectedVoice?.audioUrl} className="hidden" />
       </div>
     </div>
   );

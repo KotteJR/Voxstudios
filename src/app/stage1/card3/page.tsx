@@ -9,7 +9,7 @@ interface Voice {
   title: string;
   description: string;
   tags: string[];
-  audioData: string;
+  audioUrl?: string;
   type: 'base' | 'custom';
   uploadDate: string;
   projectId?: string;
@@ -29,16 +29,17 @@ export default function VoiceSamplesPage() {
     ? getVoicesForProject(currentProject.id).filter(voice => voice.type === activeTab)
     : [];
 
-  const handlePlay = (voiceId: string, audioData: string) => {
+  const handlePlay = (voiceId: string, audioUrl: string) => {
     if (playingId === voiceId) {
       audioRef.current?.pause();
       setPlayingId(null);
     } else {
       if (audioRef.current) {
-        audioRef.current.src = audioData;
+        audioRef.current.src = audioUrl;
         audioRef.current.play().catch(error => {
           console.error('Error playing audio:', error);
-          alert('Failed to play audio. Please try again.');
+          setPlayingId(null);
+          alert('Failed to play audio. The file may need to be re-uploaded. Please try uploading the voice again from the admin panel.');
         });
         setPlayingId(voiceId);
       }
@@ -77,28 +78,33 @@ export default function VoiceSamplesPage() {
         try {
           console.log('Processing voice:', voice.title);
           
-          // Convert base64 to blob
-          const audioData = voice.audioData.split(',')[1]; // Remove the data URL prefix
-          console.log('Audio data length:', audioData.length);
-          
-          const byteCharacters = atob(audioData);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          // Check if voice has audio URL
+          if (!voice.audioUrl) {
+            console.error('No audio URL found for voice:', voice.title);
+            continue;
           }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: 'audio/mp3' });
-          console.log('Created blob:', blob.size, 'bytes');
+
+          // Download the audio file from the proxy endpoint
+          console.log('Downloading audio from:', voice.audioUrl);
+          const audioResponse = await fetch(voice.audioUrl);
+          if (!audioResponse.ok) {
+            console.error('Failed to download audio file:', audioResponse.statusText);
+            continue;
+          }
+          
+          const audioBlob = await audioResponse.blob();
+          console.log('Downloaded audio blob:', audioBlob.size, 'bytes');
 
           // Create a File object
           const fileName = `${voice.title.replace(/\s+/g, '_')}.mp3`;
-          const file = new File([blob], fileName, { type: 'audio/mp3' });
+          const file = new File([audioBlob], fileName, { type: audioBlob.type || 'audio/mp3' });
           console.log('Created file:', fileName, file.size, 'bytes');
 
           // Create FormData and append the file
           const formData = new FormData();
           formData.append('file', file);
           formData.append('projectName', currentProject.name);
+          formData.append('stage', 'stage1');
 
           console.log('Uploading file:', fileName, 'to project:', currentProject.name);
           
@@ -197,7 +203,7 @@ export default function VoiceSamplesPage() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <button
-                          onClick={() => handlePlay(voice.id, voice.audioData)}
+                          onClick={() => voice.audioUrl && handlePlay(voice.id, voice.audioUrl)}
                           className="p-2 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                         >
                           {playingId === voice.id ? (

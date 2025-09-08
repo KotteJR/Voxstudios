@@ -24,10 +24,56 @@ export async function GET(request: NextRequest) {
     const driveId = drives?.value?.[0]?.id;
     if (!driveId) return NextResponse.json({ error: 'No document library found on site' }, { status: 500 });
 
-    const categories = ['videos', 'voices', 'documents'] as const;
-    const result: Record<string, Array<{ name: string; size: number; webUrl: string; mimeType?: string }>> = { videos: [], voices: [], documents: [] };
+    // Define stage-based folder structure
+    const stages = ['stage1', 'stage2', 'stage3', 'stage4'] as const;
+    const stageSubfolders = {
+      stage1: ['videos', 'documents', 'voices'],
+      stage2: ['documents', 'voices', 'scripts'],
+      stage3: ['feedback', 'voices'],
+      stage4: ['videos']
+    };
+    
+    const result: Record<string, Array<{ name: string; size: number; webUrl: string; mimeType?: string }>> = {};
+    
+    // Initialize result with all stage folders
+    stages.forEach(stage => {
+      stageSubfolders[stage].forEach(subfolder => {
+        const key = `${stage}_${subfolder}`;
+        result[key] = [];
+      });
+    });
+    
+    // Add legacy folders for backward compatibility
+    result.videos = [];
+    result.voices = [];
+    result.documents = [];
+    result['voice-feedback'] = [];
+    result['AI-voices'] = [];
 
-    for (const cat of categories) {
+    // Process stage-based folders
+    for (const stage of stages) {
+      for (const subfolder of stageSubfolders[stage]) {
+        const key = `${stage}_${subfolder}`;
+        try {
+          const folderPath = `/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(projectId)}/${stage}/${subfolder}`;
+          const children = await client
+            .api(`${folderPath}:/children`)
+            .select('name,size,webUrl,file')
+            .top(999)
+            .get();
+          const files = (children.value || [])
+            .filter((item: any) => !!item.file)
+            .map((item: any) => ({ name: item.name, size: item.size, webUrl: item.webUrl, mimeType: item.file?.mimeType }));
+          result[key] = files;
+        } catch {
+          result[key] = [];
+        }
+      }
+    }
+    
+    // Process legacy folders for backward compatibility
+    const legacyCategories = ['videos', 'voices', 'documents', 'voice-feedback', 'AI-voices'] as const;
+    for (const cat of legacyCategories) {
       try {
         const folderPath = `/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(projectId)}/${cat}`;
         const children = await client
@@ -38,9 +84,9 @@ export async function GET(request: NextRequest) {
         const files = (children.value || [])
           .filter((item: any) => !!item.file)
           .map((item: any) => ({ name: item.name, size: item.size, webUrl: item.webUrl, mimeType: item.file?.mimeType }));
-        (result as any)[cat] = files;
+        result[cat] = files;
       } catch {
-        (result as any)[cat] = [];
+        result[cat] = [];
       }
     }
 

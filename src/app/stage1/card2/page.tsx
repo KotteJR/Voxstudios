@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useProject } from '@/contexts/ProjectContext';
+import BriefModal from '@/components/BriefModal';
 
 interface Checkpoint {
   id: number;
@@ -19,6 +20,10 @@ export default function AuditioningBrief() {
   ]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [documents, setDocuments] = useState<Array<{ name: string; size: number; webUrl: string; mimeType?: string }>>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState('');
+  const [modalTitle, setModalTitle] = useState('');
 
   const handleAddCheckpoint = () => {
     const newId = Math.max(...checkpoints.map(cp => cp.id)) + 1;
@@ -49,6 +54,36 @@ export default function AuditioningBrief() {
     ].join('\n');
 
     return briefContent;
+  };
+
+  const refreshDocuments = async () => {
+    if (!currentProject) return;
+    try {
+      const res = await fetch(`/api/projects/files?projectId=${encodeURIComponent(currentProject.id)}`);
+      const data = await res.json();
+      // Check both new stage-based structure and legacy structure
+      if (data?.files?.['stage1_documents']) {
+        setDocuments(data.files['stage1_documents']);
+      } else if (data?.files?.documents) {
+        setDocuments(data.files.documents);
+      }
+    } catch (e) {
+      console.error('Failed to load documents:', e);
+    }
+  };
+
+  const handleViewBrief = async (fileName: string) => {
+    if (!currentProject) return;
+    try {
+      const res = await fetch(`/api/projects/brief?projectId=${encodeURIComponent(currentProject.id)}&fileName=${encodeURIComponent(fileName)}`);
+      if (!res.ok) throw new Error('Failed to load brief');
+      const { content } = await res.json();
+      setModalTitle(fileName);
+      setModalContent(content);
+      setModalOpen(true);
+    } catch (error) {
+      console.error('Failed to load brief:', error);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,6 +120,7 @@ export default function AuditioningBrief() {
       const formData = new FormData();
       formData.append('file', briefFile);
       formData.append('projectName', currentProject.name);
+      formData.append('stage', 'stage1');
 
       // Upload the brief file
       const response = await fetch('/api/upload', {
@@ -96,9 +132,10 @@ export default function AuditioningBrief() {
         throw new Error('Failed to save brief');
       }
 
-      // Reset form on success
+      // Reset form on success and refresh documents
       setDescription('');
       setCheckpoints([{ id: 1, text: '', completed: false }]);
+      await refreshDocuments();
       alert('Brief saved successfully!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -106,6 +143,11 @@ export default function AuditioningBrief() {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    refreshDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProject?.id]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -189,7 +231,45 @@ export default function AuditioningBrief() {
             {isSubmitting ? 'Saving...' : 'Submit Brief'}
           </button>
         </form>
+
+        {/* Uploaded Documents */}
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">Uploaded Documents</h2>
+          {documents.length === 0 ? (
+            <p className="text-sm text-gray-500">No documents uploaded yet.</p>
+          ) : (
+            <ul className="divide-y divide-gray-200 border border-gray-200 rounded-lg">
+              {documents.map((d) => (
+                <li key={d.name} className="flex items-center justify-between px-4 py-3">
+                  <div className="min-w-0 mr-4">
+                    <a href={d.webUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline break-all">
+                      {d.name}
+                    </a>
+                    <div className="text-xs text-gray-500">{(d.size / (1024 * 1024)).toFixed(2)} MB</div>
+                  </div>
+                  <div className="flex gap-2">
+                    {d.name.startsWith('brief_') && d.name.endsWith('.txt') && (
+                      <button
+                        onClick={() => handleViewBrief(d.name)}
+                        className="px-2 py-1 text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        View
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
+      
+      <BriefModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        content={modalContent}
+        title={modalTitle}
+      />
     </div>
   );
 } 

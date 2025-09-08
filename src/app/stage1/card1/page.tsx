@@ -53,6 +53,7 @@ export default function VideoUpload() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('projectName', currentProject.name);
+      formData.append('stage', 'stage1');
 
       const response = await fetch('/api/upload', {
         method: 'POST',
@@ -90,7 +91,12 @@ export default function VideoUpload() {
     try {
       const res = await fetch(`/api/projects/files?projectId=${encodeURIComponent(currentProject.id)}`);
       const data = await res.json();
-      if (data?.files?.videos) setUploaded(data.files.videos);
+      // Check both new stage-based structure and legacy structure
+      if (data?.files?.['stage1_videos']) {
+        setUploaded(data.files['stage1_videos']);
+      } else if (data?.files?.videos) {
+        setUploaded(data.files.videos);
+      }
     } catch (e) {
       console.error('Failed to load video list:', e);
     }

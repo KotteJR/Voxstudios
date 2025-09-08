@@ -9,7 +9,7 @@ interface Voice {
   title: string;
   description: string;
   tags: string[];
-  audioData: string;
+  audioUrl?: string;
   type: 'base' | 'custom';
   uploadDate: string;
   projectId?: string;
@@ -29,16 +29,17 @@ export default function IteratedVoicesPage() {
     ? getAIVoicesForStage(currentProject.id, 'stage3').filter(voice => voice.type === activeTab)
     : [];
 
-  const handlePlay = (voiceId: string, audioData: string) => {
+  const handlePlay = (voiceId: string, audioUrl: string) => {
     if (playingId === voiceId) {
       audioRef.current?.pause();
       setPlayingId(null);
     } else {
       if (audioRef.current) {
-        audioRef.current.src = audioData;
+        audioRef.current.src = audioUrl;
         audioRef.current.play().catch(error => {
           console.error('Error playing audio:', error);
-          alert('Failed to play audio. Please try again.');
+          setPlayingId(null);
+          alert('Failed to play audio. The file may need to be re-uploaded. Please try uploading the voice again from the admin panel.');
         });
         setPlayingId(voiceId);
       }
@@ -108,7 +109,7 @@ export default function IteratedVoicesPage() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <button
-                          onClick={() => handlePlay(voice.id, voice.audioData)}
+                          onClick={() => voice.audioUrl && handlePlay(voice.id, voice.audioUrl)}
                           className="p-2 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                         >
                           {playingId === voice.id ? (

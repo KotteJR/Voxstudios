@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVoices } from '@/contexts/VoiceContext';
 import { useProject } from '@/contexts/ProjectContext';
 import { 
   CloudArrowUpIcon,
+  ExclamationTriangleIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
 interface VoiceDetails {
@@ -17,7 +19,7 @@ interface VoiceDetails {
   projectId?: string;
   stageId?: string;
   isAIVoice?: boolean;
-  audioData: string;
+  audioData: string; // Still needed for upload process
 }
 
 interface VideoDetails {
@@ -25,10 +27,115 @@ interface VideoDetails {
   projectId: string;
 }
 
+// Storage Monitor Component
+function StorageMonitor() {
+  const { getStorageInfo, clearOldVoices } = useVoices();
+  const [storageInfo, setStorageInfo] = useState(() => {
+    // Only access localStorage on client side to prevent hydration errors
+    if (typeof window !== 'undefined') {
+      return getStorageInfo();
+    }
+    return { used: 0, available: 0, percentage: 0 };
+  });
+  const [isClient, setIsClient] = useState(false);
+
+  // Handle client-side mounting to prevent hydration errors
+  useEffect(() => {
+    setIsClient(true);
+    setStorageInfo(getStorageInfo());
+  }, []);
+
+  const updateStorageInfo = () => {
+    setStorageInfo(getStorageInfo());
+  };
+
+  const handleCleanup = () => {
+    clearOldVoices();
+    updateStorageInfo();
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const getStatusColor = (percentage: number) => {
+    if (percentage >= 90) return 'text-red-600 bg-red-50';
+    if (percentage >= 70) return 'text-yellow-600 bg-yellow-50';
+    return 'text-green-600 bg-green-50';
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-medium text-gray-900">Storage Usage</h2>
+        <button
+          onClick={updateStorageInfo}
+          className="text-sm text-indigo-600 hover:text-indigo-500"
+        >
+          Refresh
+        </button>
+      </div>
+      
+      <div className="space-y-4">
+        {isClient ? (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Used: {formatBytes(storageInfo.used)}</span>
+              <span className="text-sm text-gray-600">Available: {formatBytes(storageInfo.available)}</span>
+            </div>
+        
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div
+            className={`h-2 rounded-full transition-all duration-300 ${
+              storageInfo.percentage >= 90 ? 'bg-red-500' :
+              storageInfo.percentage >= 70 ? 'bg-yellow-500' : 'bg-green-500'
+            }`}
+            style={{ width: `${Math.min(storageInfo.percentage, 100)}%` }}
+          />
+        </div>
+        
+        <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(storageInfo.percentage)}`}>
+          {storageInfo.percentage >= 90 && <ExclamationTriangleIcon className="w-4 h-4 mr-1" />}
+          {storageInfo.percentage.toFixed(1)}% used
+        </div>
+        
+        {storageInfo.percentage >= 70 && (
+          <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <div className="flex items-center">
+              <ExclamationTriangleIcon className="w-5 h-5 text-yellow-600 mr-2" />
+              <span className="text-sm text-yellow-800">
+                {storageInfo.percentage >= 90 
+                  ? 'Storage is nearly full! Clean up old voices to prevent upload failures.'
+                  : 'Storage usage is high. Consider cleaning up old voices.'
+                }
+              </span>
+            </div>
+            <button
+              onClick={handleCleanup}
+              className="flex items-center px-3 py-1 bg-yellow-600 text-white text-sm rounded-md hover:bg-yellow-700 transition-colors"
+            >
+              <TrashIcon className="w-4 h-4 mr-1" />
+              Clean Up
+            </button>
+          </div>
+        )}
+          </>
+        ) : (
+          <div className="text-sm text-gray-500">Loading storage information...</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const { isAuthenticated, isAdmin } = useAuth();
-  const { addVoice } = useVoices();
+  const { addVoice, clearOldVoices, getStorageInfo } = useVoices();
   const { projects, currentProject } = useProject();
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -126,14 +233,34 @@ export default function AdminDashboard() {
 
     setIsUploading(true);
     try {
-      // Add the voice to the context with the base64 audio data
+      // First, upload the file to SharePoint
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('projectName', voiceDetails.projectId);
+      formData.append('stage', voiceDetails.stageId || 'stage1');
+      
+      const uploadResponse = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const uploadResult = await uploadResponse.json();
+      
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.message || 'Upload failed');
+      }
+
+      // Create proxy URL for audio playback with file path info
+      const proxyAudioUrl = `/api/audio-proxy?filePath=${encodeURIComponent(uploadResult.filePath)}&siteId=${uploadResult.siteId}&driveId=${uploadResult.driveId}`;
+
+      // Then add the voice metadata to the context with the proxy URL
       await addVoice({
         title: voiceDetails.title,
         description: voiceDetails.description,
         tags: voiceDetails.tags.split(',').map(tag => tag.trim()),
         type: voiceDetails.type,
-        audioData: voiceDetails.audioData,
-        projectId: voiceDetails.projectId, // Always include projectId
+        audioUrl: proxyAudioUrl, // Use proxy URL for playback
+        projectId: voiceDetails.projectId,
         stageId: voiceDetails.stageId,
         isAIVoice: voiceDetails.isAIVoice
       });
@@ -200,6 +327,9 @@ export default function AdminDashboard() {
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto space-y-8">
         <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+
+        {/* Storage Monitoring Section */}
+        <StorageMonitor />
 
         {/* Voice Upload Section */}
         <div className="bg-white rounded-lg shadow p-6">

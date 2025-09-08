@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useProject } from '@/contexts/ProjectContext';
+import BriefModal from '@/components/BriefModal';
 
 interface ScriptLine {
   id: number;
@@ -16,7 +17,10 @@ export default function ScriptUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [documents, setDocuments] = useState<Array<{ name: string; size: number; webUrl: string; mimeType?: string }>>([]);
+  const [documents, setDocuments] = useState<Array<{ name: string; size: number; webUrl: string; mimeType?: string; type?: string }>>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalContent, setModalContent] = useState('');
+  const [modalTitle, setModalTitle] = useState('');
   const [scriptLines, setScriptLines] = useState<ScriptLine[]>([
     { id: 1, text: '', timestamp: '00:00' },
     { id: 2, text: '', timestamp: '' },
@@ -76,6 +80,8 @@ export default function ScriptUpload() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('projectName', currentProject.name);
+      formData.append('stage', 'stage2');
+      formData.append('folderName', 'scripts');
 
       const response = await fetch('/api/upload', {
         method: 'POST',
@@ -111,26 +117,74 @@ export default function ScriptUpload() {
     try {
       const res = await fetch(`/api/projects/files?projectId=${encodeURIComponent(currentProject.id)}`);
       const data = await res.json();
-      if (data?.files?.documents) setDocuments(data.files.documents);
+      
+      // Combine both scripts and documents
+      const allDocuments: Array<{ name: string; size: number; webUrl: string; mimeType?: string; type?: string }> = [];
+      
+      // Add scripts with type indicator
+      if (data?.files?.['stage2_scripts']) {
+        const scripts = data.files['stage2_scripts'].map((doc: any) => ({
+          ...doc,
+          type: 'script'
+        }));
+        allDocuments.push(...scripts);
+      }
+      
+      // Add documents with type indicator
+      if (data?.files?.['stage2_documents']) {
+        const documents = data.files['stage2_documents'].map((doc: any) => ({
+          ...doc,
+          type: 'document'
+        }));
+        allDocuments.push(...documents);
+      }
+      
+      // Fallback to legacy documents folder
+      if (data?.files?.documents && allDocuments.length === 0) {
+        const documents = data.files.documents.map((doc: any) => ({
+          ...doc,
+          type: 'document'
+        }));
+        allDocuments.push(...documents);
+      }
+      
+      setDocuments(allDocuments);
     } catch (e) {
       console.error('Failed to load documents:', e);
     }
   };
 
-  const handleDelete = async (name: string) => {
+  const handleDelete = async (name: string, fileType?: string) => {
     if (!currentProject) return;
     if (!confirm(`Remove ${name}?`)) return;
     try {
+      // Determine the correct category based on file type
+      const category = fileType === 'script' ? 'scripts' : 'documents';
+      
       const res = await fetch('/api/projects/delete-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: currentProject.id, category: 'documents', name })
+        body: JSON.stringify({ projectId: currentProject.id, category, name })
       });
       if (!res.ok) throw new Error('Delete failed');
       await refreshDocuments();
     } catch (e) {
       console.error('Delete error:', e);
       alert('Failed to delete file');
+    }
+  };
+
+  const handleViewBrief = async (fileName: string) => {
+    if (!currentProject) return;
+    try {
+      const res = await fetch(`/api/projects/brief?projectId=${encodeURIComponent(currentProject.id)}&fileName=${encodeURIComponent(fileName)}`);
+      if (!res.ok) throw new Error('Failed to load brief');
+      const { content } = await res.json();
+      setModalTitle(fileName);
+      setModalContent(content);
+      setModalOpen(true);
+    } catch (error) {
+      console.error('Failed to load brief:', error);
     }
   };
 
@@ -214,7 +268,8 @@ export default function ScriptUpload() {
       const formData = new FormData();
       formData.append('file', scriptFile);
       formData.append('projectName', currentProject.name);
-      formData.append('folderName', folderName);
+      formData.append('stage', 'stage2');
+      formData.append('folderName', 'scripts');
 
       // Upload the script file
       const response = await fetch('/api/upload', {
@@ -393,17 +448,38 @@ export default function ScriptUpload() {
                   {documents.map((d) => (
                     <li key={d.name} className="flex items-center justify-between px-4 py-3">
                       <div className="min-w-0 mr-4">
-                        <a href={d.webUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline break-all">
-                          {d.name}
-                        </a>
+                        <div className="flex items-center gap-2">
+                          <a href={d.webUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline break-all">
+                            {d.name}
+                          </a>
+                          {d.type && (
+                            <span className={`px-2 py-1 text-xs rounded-full ${
+                              d.type === 'script' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {d.type === 'script' ? 'Script' : 'Document'}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-gray-500">{(d.size / (1024 * 1024)).toFixed(2)} MB</div>
                       </div>
-                      <button
-                        onClick={() => handleDelete(d.name)}
-                        className="px-2 py-1 text-sm text-red-600 hover:text-red-800"
-                      >
-                        Remove
-                      </button>
+                      <div className="flex gap-2">
+                        {d.name.startsWith('brief_') && d.name.endsWith('.txt') && (
+                          <button
+                            onClick={() => handleViewBrief(d.name)}
+                            className="px-2 py-1 text-sm text-blue-600 hover:text-blue-800"
+                          >
+                            View
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(d.name, d.type)}
+                          className="px-2 py-1 text-sm text-red-600 hover:text-red-800"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -412,6 +488,13 @@ export default function ScriptUpload() {
           </>
         )}
       </div>
+      
+      <BriefModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        content={modalContent}
+        title={modalTitle}
+      />
     </div>
   );
 } 
