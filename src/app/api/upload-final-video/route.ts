@@ -4,9 +4,10 @@ import { ClientSecretCredential } from '@azure/identity';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 
-// Configure the API route
+// Configure the API route to handle large files
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // 5 minutes timeout
 
 export async function POST(req: NextRequest) {
   try {
