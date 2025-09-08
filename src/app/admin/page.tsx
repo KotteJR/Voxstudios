@@ -294,6 +294,16 @@ export default function AdminDashboard() {
       return;
     }
 
+    // Check file size for Vercel limitations
+    const maxSize = 4.5 * 1024 * 1024; // 4.5MB in bytes
+    if (file.size > maxSize) {
+      setUploadError(
+        `File size (${formatFileSize(file.size)}) exceeds Vercel limit (4.5MB). ` +
+        'Please compress your video or use a different upload method.'
+      );
+      return;
+    }
+
     setIsUploading(true);
     setUploadError(null);
     setUploadSuccess(false);
@@ -301,10 +311,11 @@ export default function AdminDashboard() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('projectId', currentProject.id);
-      formData.append('title', videoDetails.title || file.name);
+      formData.append('projectName', currentProject.name); // Use projectName like other stages
+      formData.append('stage', 'stage4'); // Upload to stage4 like other stages
+      formData.append('folderName', 'final-videos'); // Specify folder name
 
-      const response = await fetch('/api/upload-final-video', {
+      const response = await fetch('/api/upload', { // Use standard upload endpoint
         method: 'POST',
         body: formData,
       });
@@ -312,6 +323,14 @@ export default function AdminDashboard() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('Upload failed:', response.status, errorData);
+        
+        // Handle specific Vercel 413 error
+        if (response.status === 413) {
+          throw new Error(
+            'File too large for Vercel deployment. Please compress your video to under 4.5MB or use a different upload method.'
+          );
+        }
+        
         throw new Error(errorData.error || `Upload failed with status ${response.status}`);
       }
 
@@ -326,6 +345,15 @@ export default function AdminDashboard() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Helper function to format file size
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
@@ -595,6 +623,7 @@ export default function AdminDashboard() {
                       <p className="pl-1">or drag and drop</p>
                     </div>
                     <p className="text-xs text-gray-500">MP4, WebM, or other video formats</p>
+                    <p className="text-xs text-amber-600 font-medium">⚠️ Maximum file size: 4.5MB (Vercel limit)</p>
                   </div>
                 </div>
               </div>

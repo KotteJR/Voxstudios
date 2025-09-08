@@ -1,24 +1,20 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Increase the body size limit for API routes to handle large video uploads
+  // Configure for Vercel deployment with proper limits
   experimental: {
-    // This allows larger request bodies for API routes
     serverComponentsExternalPackages: [],
+    // Set body size limit to Vercel's maximum (4.5MB)
+    serverActions: {
+      bodySizeLimit: '4.5mb',
+    },
   },
   
-  // Configure API routes to handle large file uploads
+  // Configure API routes for Vercel's serverless functions
   api: {
     bodyParser: {
-      sizeLimit: '100mb', // Increase from default 1mb to 100mb
+      sizeLimit: '4.5mb', // Vercel's maximum payload size
     },
     responseLimit: false,
-  },
-
-  // Enable streaming for better performance with large files
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '100mb',
-    },
   },
 
   // Configure webpack to handle large files
@@ -31,9 +27,9 @@ const nextConfig = {
     return config;
   },
 
-  // Increase timeout for API routes
+  // Vercel serverless function timeout (max 60s for hobby, 300s for pro)
   serverRuntimeConfig: {
-    maxDuration: 300, // 5 minutes
+    maxDuration: 60, // 60 seconds for Vercel hobby plan
   },
 }
 

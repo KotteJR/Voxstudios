@@ -16,17 +16,10 @@ interface Step {
 const initialSteps: Step[] = [
   {
     id: 'final-review',
-    name: 'Final Voice Review',
-    description: 'Review and compare final voice selections',
+    name: 'Final Deliverable',
+    description: 'View your final video with voice-over',
     status: 'in_progress',
     href: '/stage4/card1'
-  },
-  {
-    id: 'approval',
-    name: 'Final Approval',
-    description: 'Approve the selected voice for production',
-    status: 'in_progress',
-    href: '/stage4/card2'
   }
 ];
 
