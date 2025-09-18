@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useVoices } from '@/contexts/VoiceContext';
 import { useProject } from '@/contexts/ProjectContext';
 
@@ -20,16 +20,46 @@ interface Voice {
 export default function AIPoweredVersionsPage() {
   const { getAIVoicesForStage } = useVoices();
   const { currentProject } = useProject();
-  const [activeTab, setActiveTab] = useState<'base' | 'custom'>('base');
+  // Unified voice view (no base/custom)
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [selectedVoices, setSelectedVoices] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [teamVoices, setTeamVoices] = useState<Voice[]>([]);
 
   // Get AI voices for Stage 2
-  const currentVoices = currentProject
-    ? getAIVoicesForStage(currentProject.id, 'stage2').filter(voice => voice.type === activeTab)
-    : [];
+  const contextVoices = currentProject ? getAIVoicesForStage(currentProject.id, 'stage2') : [];
+  const currentVoices = [...contextVoices, ...teamVoices];
+
+  // Load voices from Teams under {project}/stage2/voices and map into Voice-like objects
+  useEffect(() => {
+    const loadFromTeams = async () => {
+      if (!currentProject) return setTeamVoices([]);
+      try {
+        const res = await fetch(`/api/projects/files?projectId=${encodeURIComponent(currentProject.id)}`, { cache: 'no-store' });
+        const data = await res.json();
+        const list = (data?.files?.['stage2_voices'] || []) as Array<{ name: string; url?: string; webUrl: string }>;
+        const mapped: Voice[] = list.map((f) => ({
+          id: `teams-${f.name}`,
+          title: f.name.replace(/\.[^/.]+$/, ''),
+          description: 'Uploaded to Teams: stage2/voices',
+          tags: [],
+          audioUrl: f.url || f.webUrl,
+          type: 'custom',
+          uploadDate: new Date().toISOString(),
+          projectId: currentProject.id,
+          stageId: 'stage2',
+          isAIVoice: true,
+        }));
+        const existingTitles = new Set(contextVoices.map(v => v.title));
+        setTeamVoices(mapped.filter(v => !existingTitles.has(v.title)));
+      } catch (e) {
+        console.error('Failed to load stage2 voices from Teams:', e);
+        setTeamVoices([]);
+      }
+    };
+    loadFromTeams();
+  }, [currentProject]);
 
   const handlePlay = (voiceId: string, audioUrl: string) => {
     if (playingId === voiceId) {
@@ -98,7 +128,8 @@ export default function AIPoweredVersionsPage() {
           console.log('Downloaded audio blob:', audioBlob.size, 'bytes');
 
           // Create a File object
-          const fileName = `${voice.title.replace(/\s+/g, '_')}.mp3`;
+          const safeTitle = voice.title.replace(/\s+/g, '_');
+          const fileName = `${safeTitle}.mp3`;
           const file = new File([audioBlob], fileName, { type: audioBlob.type || 'audio/mp3' });
           console.log('Created file:', fileName, file.size, 'bytes');
 
@@ -106,10 +137,11 @@ export default function AIPoweredVersionsPage() {
           const formData = new FormData();
           formData.append('file', file);
           formData.append('projectName', currentProject.name);
-          formData.append('stage', 'stage2');
-          formData.append('folderName', 'ai-voices'); // Specify the folder name for AI voices
+          // Store directly where Stage 3 reads from: stage3/voices/{voiceTitle}
+          formData.append('stage', 'stage3');
+          formData.append('folderName', `voices/${safeTitle}`);
 
-          console.log('Uploading file:', fileName, 'to project:', currentProject.name, 'in folder: AI-voices');
+          console.log('Uploading file:', fileName, 'to project:', currentProject.name, 'in folder: stage3/voices/', safeTitle);
           
           // Upload the voice file
           const response = await fetch('/api/upload', {
@@ -122,6 +154,17 @@ export default function AIPoweredVersionsPage() {
 
           if (!response.ok) {
             throw new Error(`Failed to upload voice: ${voice.title}. Server response: ${JSON.stringify(responseData)}`);
+          }
+
+          // After successful upload, create Stage 3 voice folder for feedback session
+          try {
+            await fetch('/api/projects/stage3/create-voice-folder', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ projectName: currentProject.name, voiceTitle: voice.title })
+            });
+          } catch (e) {
+            console.warn('Failed to create Stage 3 voice folder:', e);
           }
         } catch (voiceError) {
           console.error('Error processing voice:', voice.title, voiceError);
@@ -142,13 +185,14 @@ export default function AIPoweredVersionsPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="w-full max-w-6xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-semibold text-gray-900 mb-6">AI Powered Versions</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold text-gray-900 mb-6">Auditioning Voices</h1>
         
         {currentProject ? (
-          <p className="mb-4 text-gray-700">Selecting AI voices for: <span className="font-semibold">{currentProject.name}</span></p>
+          <p className="mb-4 text-gray-700">Selecting voices for: <span className="font-semibold">{currentProject.name}</span></p>
         ) : (
           <p className="mb-4 text-red-600">No project selected. Please select a project first.</p>
         )}
+
 
         {!currentProject ? (
           <div className="text-center py-12">
@@ -156,38 +200,11 @@ export default function AIPoweredVersionsPage() {
           </div>
         ) : (
           <>
-            <div className="mb-6">
-              <div className="flex space-x-1 p-1 bg-gray-100 rounded-lg max-w-xs">
-                <button
-                  onClick={() => setActiveTab('base')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'base'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Base Voices
-                </button>
-                <button
-                  onClick={() => setActiveTab('custom')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'custom'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Custom Voices
-                </button>
-              </div>
-            </div>
+            <div className="mb-6" />
 
             {currentVoices.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-gray-500">
-                  {activeTab === 'base' 
-                    ? 'No AI base voices available.' 
-                    : 'No AI custom voices available for this project.'}
-                </p>
+                <p className="text-gray-500">No voices available.</p>
               </div>
             ) : (
               <>

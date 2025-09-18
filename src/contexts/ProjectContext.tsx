@@ -16,6 +16,7 @@ interface ProjectContextType {
   setCurrentProject: (project: Project | null) => void;
   createProject: (name: string) => Promise<void>;
   loading: boolean;
+  prefetch?: Record<string, any> | null;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -24,6 +25,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [prefetch, setPrefetch] = useState<Record<string, any> | null>(null);
+  const prefetchRef = React.useRef<Record<string, any> | null>(null);
+  const refreshTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Load projects from API
@@ -57,14 +61,64 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
     loadProjects();
     loadCurrentProject();
+    // Restore cached files if available for the selected project
+    try {
+      const storedProject = Cookies.get('selectedProject');
+      if (storedProject) {
+        const parsed = JSON.parse(storedProject);
+        const cached = sessionStorage.getItem(`files_${parsed.id}`);
+        if (cached) {
+          prefetchRef.current = JSON.parse(cached);
+          setPrefetch(prefetchRef.current);
+          (window as any).__FILES_CACHE__ = prefetchRef.current;
+        }
+      }
+    } catch {}
   }, []);
 
   // Update cookie when current project changes
   useEffect(() => {
     if (currentProject) {
       Cookies.set('selectedProject', JSON.stringify(currentProject), { expires: 7, path: '/', sameSite: 'lax' });
+      // Preload all stage file lists for faster tab switching
+      (async () => {
+        try {
+          // Kick off multiple fetches in parallel for better warm cache
+          await Promise.all([
+            fetch(`/api/projects/files?projectId=${encodeURIComponent(currentProject.id)}`, { cache: 'no-store' })
+          ]).then(async ([all]) => {
+            const data = await all.json();
+            prefetchRef.current = data?.files || {};
+            setPrefetch(prefetchRef.current);
+            try {
+              // Persist to sessionStorage to survive soft navigations
+              sessionStorage.setItem(`files_${currentProject.id}`, JSON.stringify(prefetchRef.current));
+              (window as any).__FILES_CACHE__ = prefetchRef.current;
+            } catch {}
+          });
+          // Set up background refresh every 60s
+          if (refreshTimerRef.current) clearInterval(refreshTimerRef.current as any);
+          refreshTimerRef.current = setInterval(async () => {
+            try {
+              const res = await fetch(`/api/projects/files?projectId=${encodeURIComponent(currentProject.id)}`, { cache: 'no-store' });
+              const data = await res.json();
+              prefetchRef.current = data?.files || {};
+              setPrefetch(prefetchRef.current);
+              try {
+                sessionStorage.setItem(`files_${currentProject.id}`, JSON.stringify(prefetchRef.current));
+                (window as any).__FILES_CACHE__ = prefetchRef.current;
+              } catch {}
+            } catch {}
+          }, 60000);
+        } catch (e) {
+          console.error('Prefetch files failed:', e);
+          setPrefetch(null);
+        }
+      })();
     } else {
       Cookies.remove('selectedProject');
+      setPrefetch(null);
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current as any);
     }
   }, [currentProject]);
 
@@ -122,6 +176,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         setCurrentProject,
         createProject,
         loading,
+        prefetch,
       }}
     >
       {children}

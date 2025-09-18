@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
     const client = await getGraphClient();
     const site = await client.api('/sites/adamass.sharepoint.com:/sites/VoxStudiosplatform').get();
     const drives = await client.api(`/sites/${site.id}/drives`).get();
-    const driveId = drives?.value?.[0]?.id;
+    const preferredDrive = (drives?.value || []).find((d: any) => /documents/i.test(d.name || '') || /shared documents/i.test(d.name || '')) || drives?.value?.[0];
+    const driveId = preferredDrive?.id;
     if (!driveId) return NextResponse.json({ error: 'No document library found on site' }, { status: 500 });
 
     // Define stage-based folder structure
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
       stage4: ['videos']
     };
     
-    const result: Record<string, Array<{ name: string; size: number; webUrl: string; mimeType?: string }>> = {};
+    const result: Record<string, Array<{ name: string; size: number; webUrl: string; url?: string; mimeType?: string }>> = {};
     
     // Initialize result with all stage folders
     stages.forEach(stage => {
@@ -63,12 +64,87 @@ export async function GET(request: NextRequest) {
             .get();
           const files = (children.value || [])
             .filter((item: any) => !!item.file)
-            .map((item: any) => ({ name: item.name, size: item.size, webUrl: item.webUrl, mimeType: item.file?.mimeType }));
+            .map((item: any) => ({
+              name: item.name,
+              size: item.size,
+              webUrl: item.webUrl,
+              url: `/api/audio-proxy?filePath=${encodeURIComponent(`${projectId}/${stage}/${subfolder}/${item.name}`)}&siteId=${site.id}&driveId=${driveId}`,
+              mimeType: item.file?.mimeType,
+            }));
           result[key] = files;
         } catch {
           result[key] = [];
         }
       }
+    
+    // Stage 3 voice folders for feedback session
+    try {
+      const voicesFolderPath = `/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(projectId)}/stage3/voices`;
+      const voiceChildren = await client
+        .api(`${voicesFolderPath}:/children`)
+        .select('name,folder,webUrl')
+        .top(999)
+        .get();
+      const voiceFolders = (voiceChildren.value || []).filter((item: any) => !!item.folder);
+      (result as any).stage3_voiceFolders = voiceFolders.map((item: any) => ({ name: item.name, webUrl: item.webUrl }));
+
+      const entries: Array<{ title: string; url: string; webUrl: string }> = [];
+      const flattenedStage3Voices: Array<{ name: string; size: number; webUrl: string; url?: string; mimeType?: string }> = [];
+      for (const folder of voiceFolders) {
+        try {
+          const folderPath = `/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(projectId)}/stage3/voices/${encodeURIComponent(folder.name)}`;
+          const filesResp = await client
+            .api(`${folderPath}:/children`)
+            .select('name,webUrl,file,size')
+            .top(50)
+            .get();
+          const fileItems = (filesResp.value || []).filter((it: any) => it.file);
+          const audioItem = fileItems[0]; // representative first file
+          if (audioItem) {
+            entries.push({
+              title: folder.name,
+              webUrl: audioItem.webUrl,
+              url: `/api/audio-proxy?filePath=${encodeURIComponent(`${projectId}/stage3/voices/${folder.name}/${audioItem.name}`)}&siteId=${site.id}&driveId=${driveId}`,
+            });
+            for (const it of fileItems) {
+              flattenedStage3Voices.push({
+                name: it.name,
+                size: it.size || 0,
+                webUrl: it.webUrl,
+                url: `/api/audio-proxy?filePath=${encodeURIComponent(`${projectId}/stage3/voices/${folder.name}/${it.name}`)}&siteId=${site.id}&driveId=${driveId}`,
+                mimeType: it.file?.mimeType,
+              });
+            }
+          }
+        } catch {}
+      }
+      (result as any).stage3_voiceEntries = entries;
+      (result as any)['stage3_voices'] = flattenedStage3Voices;
+      // Stage 3 iterated voices uploaded by Admin go to stage3/iterated-voices
+      try {
+        const iterPath = `/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(projectId)}/stage3/iterated-voices`;
+        const iterChildren = await client
+          .api(`${iterPath}:/children`)
+          .select('name,webUrl,file,size')
+          .top(200)
+          .get();
+        const iterFiles = (iterChildren.value || []).filter((it: any) => it.file).map((it: any) => ({
+          name: it.name,
+          size: it.size || 0,
+          webUrl: it.webUrl,
+          url: `/api/audio-proxy?filePath=${encodeURIComponent(`${projectId}/stage3/iterated-voices/${it.name}`)}&siteId=${site.id}&driveId=${driveId}`,
+          mimeType: it.file?.mimeType,
+        }));
+        (result as any)['stage3_iteratedVoices'] = iterFiles;
+      } catch {
+        (result as any)['stage3_iteratedVoices'] = [];
+      }
+    } catch {
+      (result as any).stage3_voiceFolders = [];
+      (result as any).stage3_voiceEntries = [];
+      (result as any)['stage3_voices'] = [];
+      (result as any)['stage3_iteratedVoices'] = [];
+    }
     }
     
     // Process legacy folders for backward compatibility
@@ -83,7 +159,13 @@ export async function GET(request: NextRequest) {
           .get();
         const files = (children.value || [])
           .filter((item: any) => !!item.file)
-          .map((item: any) => ({ name: item.name, size: item.size, webUrl: item.webUrl, mimeType: item.file?.mimeType }));
+          .map((item: any) => ({
+            name: item.name,
+            size: item.size,
+            webUrl: item.webUrl,
+            url: `/api/audio-proxy?filePath=${encodeURIComponent(`${projectId}/${cat}/${item.name}`)}&siteId=${site.id}&driveId=${driveId}`,
+            mimeType: item.file?.mimeType,
+          }));
         result[cat] = files;
       } catch {
         result[cat] = [];

@@ -39,9 +39,26 @@ export default function FeedbackSessionPage() {
   const timelineRef = useRef<HTMLDivElement | null>(null);
 
   // Get selected voices from Stage 2
+  const [stage3Voices, setStage3Voices] = useState<Array<{ title: string; url: string; webUrl: string }>>([]);
   const selectedVoices = currentProject
     ? getAIVoicesForStage(currentProject.id, 'stage2')
     : [];
+
+  useEffect(() => {
+    const loadStage3 = async () => {
+      if (!currentProject) return setStage3Voices([]);
+      try {
+        const res = await fetch(`/api/projects/files?projectId=${encodeURIComponent(currentProject.id)}`, { cache: 'no-store' });
+        const data = await res.json();
+        const list = (data?.files?.stage3_voiceEntries || []) as Array<{ title: string; url: string; webUrl: string }>; 
+        setStage3Voices(list);
+      } catch (e) {
+        console.error('Failed to load Stage 3 voices:', e);
+        setStage3Voices([]);
+      }
+    };
+    loadStage3();
+  }, [currentProject]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -105,6 +122,10 @@ export default function FeedbackSessionPage() {
       setFeedback([...feedback, newFeedback]);
       setNewComment('');
     }
+  };
+
+  const handleDeleteFeedback = (id: string) => {
+    setFeedback(prev => prev.filter(f => f.id !== id));
   };
 
   const formatTime = (time: number) => {
@@ -241,22 +262,41 @@ ${sortedFeedback.map(fb => `[${formatTime(fb.timestamp)}] ${fb.comment} ${fb.res
           {/* Voice List */}
           <div className="lg:col-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <h2 className="text-lg font-medium text-gray-900 mb-4">Selected Voices</h2>
-            <div className="space-y-2">
-              {selectedVoices.map((voice) => (
-                <button
-                  key={voice.id}
-                  onClick={() => handleVoiceSelect(voice)}
-                  className={`w-full text-left p-3 rounded-lg transition-colors ${
-                    selectedVoice?.id === voice.id
-                      ? 'bg-blue-50 border border-blue-200'
-                      : 'hover:bg-gray-50 border border-transparent'
-                  }`}
-                >
-                  <h3 className="font-medium text-gray-900">{voice.title}</h3>
-                  <p className="text-sm text-gray-500 truncate">{voice.description}</p>
-                </button>
-              ))}
+            <div className="grid grid-cols-1 gap-4">
+              {stage3Voices.length > 0
+                ? stage3Voices.map((v) => (
+                  <button
+                    key={v.title}
+                    onClick={() => handleVoiceSelect({ id: v.title, title: v.title, description: '', tags: [], audioUrl: v.url, type: 'custom', uploadDate: new Date().toISOString() })}
+                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                      selectedVoice?.title === v.title
+                        ? 'bg-blue-50 border border-blue-200'
+                        : 'hover:bg-gray-50 border border-transparent'
+                    }`}
+                  >
+                    <h3 className="font-medium text-gray-900">{v.title}</h3>
+                  </button>
+                ))
+                : selectedVoices.map((voice) => (
+                  <button
+                    key={voice.id}
+                    onClick={() => handleVoiceSelect(voice)}
+                    className={`w-full text-left p-4 rounded-lg border transition-colors ${
+                      selectedVoice?.id === voice.id
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
+                    <h3 className="text-base font-medium text-gray-900">{voice.title}</h3>
+                    {voice.description && (
+                      <p className="mt-1 text-sm text-gray-500 truncate">{voice.description}</p>
+                    )}
+                  </button>
+                ))}
             </div>
+            {(stage3Voices.length === 0 && selectedVoices.length === 0) && (
+              <div className="text-center text-gray-500 text-sm py-8">No voices available.</div>
+            )}
           </div>
 
           {/* Audio Player and Feedback */}
@@ -339,10 +379,7 @@ ${sortedFeedback.map(fb => `[${formatTime(fb.timestamp)}] ${fb.comment} ${fb.res
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Feedback List</h3>
                   <div className="space-y-3">
                     {feedback.map((fb) => (
-                      <div
-                        key={fb.id}
-                        className="flex items-start gap-4 p-3 rounded-lg bg-gray-50"
-                      >
+                      <div key={fb.id} className="flex items-start gap-4 p-3 rounded-lg bg-gray-50">
                         <button
                           onClick={() => {
                             if (audioRef.current) {
@@ -351,33 +388,26 @@ ${sortedFeedback.map(fb => `[${formatTime(fb.timestamp)}] ${fb.comment} ${fb.res
                             }
                           }}
                           className="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700"
+                          title="Jump to time"
                         >
                           {formatTime(fb.timestamp)}
                         </button>
                         <p className="flex-1 text-gray-700">{fb.comment}</p>
                         <button
-                          onClick={() => {
-                            setFeedback(feedback.map(f => 
-                              f.id === fb.id ? { ...f, resolved: !f.resolved } : f
-                            ));
-                          }}
-                          className={`shrink-0 p-1 rounded-full ${
-                            fb.resolved
-                              ? 'text-green-600 hover:text-green-700'
-                              : 'text-gray-400 hover:text-gray-500'
-                          }`}
+                          onClick={() => handleDeleteFeedback(fb.id)}
+                          className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                          title="Remove"
+                          aria-label="Remove"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 13l4 4L19 7"
-                            />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
                       </div>
                     ))}
+                    {feedback.length === 0 && (
+                      <div className="text-center text-gray-500 text-sm">No feedback yet.</div>
+                    )}
                   </div>
                 </div>
               </div>

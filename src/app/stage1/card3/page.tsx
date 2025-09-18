@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useVoices } from '@/contexts/VoiceContext';
 import { useProject } from '@/contexts/ProjectContext';
 
@@ -17,17 +17,52 @@ interface Voice {
 
 export default function VoiceSamplesPage() {
   const { getVoicesForProject, voices } = useVoices();
-  const { currentProject } = useProject();
-  const [activeTab, setActiveTab] = useState<'base' | 'custom'>('base');
+  const { currentProject, prefetch } = useProject();
+  // Unified voice view (no base/custom)
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [selectedVoices, setSelectedVoices] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [teamVoices, setTeamVoices] = useState<Voice[]>([]);
 
   // Get all available voices for the current project
-  const currentVoices = currentProject
-    ? getVoicesForProject(currentProject.id).filter(voice => voice.type === activeTab)
-    : [];
+  const contextVoices = currentProject ? getVoicesForProject(currentProject.id) : [];
+  const currentVoices = [...contextVoices, ...teamVoices];
+
+  // Load voices from Teams under {project}/stage1/voices and map into Voice-like objects
+  useEffect(() => {
+    const loadFromTeams = async () => {
+      if (!currentProject) return setTeamVoices([]);
+      try {
+        // Prefer prefetched files for instant render; fallback to network
+        let data: any = null;
+        if (prefetch && prefetch['stage1_voices']) {
+          data = { files: prefetch };
+        } else {
+          const res = await fetch(`/api/projects/files?projectId=${encodeURIComponent(currentProject.id)}`, { cache: 'no-store' });
+          data = await res.json();
+        }
+        const list = (data?.files?.['stage1_voices'] || []) as Array<{ name: string; url?: string; webUrl: string }>;
+        const mapped: Voice[] = list.map((f) => ({
+          id: `teams-${f.name}`,
+          title: f.name.replace(/\.[^/.]+$/, ''),
+          description: 'Uploaded to Teams: stage1/voices',
+          tags: [],
+          audioUrl: f.url || f.webUrl,
+          type: 'custom',
+          uploadDate: new Date().toISOString(),
+          projectId: currentProject.id,
+        }));
+        // De-dupe by title against context voices
+        const existingTitles = new Set(contextVoices.map(v => v.title));
+        setTeamVoices(mapped.filter(v => !existingTitles.has(v.title)));
+      } catch (e) {
+        console.error('Failed to load stage1 voices from Teams:', e);
+        setTeamVoices([]);
+      }
+    };
+    loadFromTeams();
+  }, [currentProject, prefetch]);
 
   const handlePlay = (voiceId: string, audioUrl: string) => {
     if (playingId === voiceId) {
@@ -153,38 +188,11 @@ export default function VoiceSamplesPage() {
           </div>
         ) : (
           <>
-            <div className="mb-6">
-              <div className="flex space-x-1 p-1 bg-gray-100 rounded-lg max-w-xs">
-                <button
-                  onClick={() => setActiveTab('base')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'base'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Base Voices
-                </button>
-                <button
-                  onClick={() => setActiveTab('custom')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'custom'
-                      ? 'bg-white text-blue-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Custom Voices
-                </button>
-              </div>
-            </div>
+            <div className="mb-6" />
 
             {currentVoices.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-gray-500">
-                  {activeTab === 'base' 
-                    ? 'No base voices available.' 
-                    : 'No custom voices available for this project.'}
-                </p>
+                <p className="text-gray-500">No voices available.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">

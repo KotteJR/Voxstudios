@@ -237,8 +237,17 @@ export default function AdminDashboard() {
       // First, upload the file to SharePoint
       const formData = new FormData();
       formData.append('file', selectedFile);
-      formData.append('projectName', voiceDetails.projectId);
-      formData.append('stage', voiceDetails.stageId || 'stage1');
+      formData.append('projectName', voiceDetails.projectId || '');
+      const stage = voiceDetails.stageId || 'stage1';
+      formData.append('stage', stage);
+      // Ensure files go to the folders each stage UI reads from
+      const safeTitle = (voiceDetails.title || 'voice').replace(/\s+/g, '_').replace(/[^\w\-]/g, '_');
+      if (stage === 'stage3') {
+        // Iterated voices go to a dedicated folder so Stage 3 (Iterated) shows only admin uploads
+        formData.append('folderName', `iterated-voices`);
+      } else {
+        formData.append('folderName', 'voices');
+      }
       
       const uploadResponse = await fetch('/api/upload', {
         method: 'POST',
@@ -478,42 +487,7 @@ export default function AdminDashboard() {
               </select>
             </div>
 
-            {/* Voice Type Selection */}
-            <div>
-              <label htmlFor="type" className="block text-sm font-medium text-gray-700">
-                Voice Type
-              </label>
-              <div className="mt-1 grid grid-cols-2 gap-3">
-                <div
-                  className={`
-                    border rounded-lg p-4 cursor-pointer text-center transition-all
-                    ${voiceDetails.type === 'base'
-                      ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-500'
-                      : 'border-gray-300 hover:border-indigo-400'
-                    }
-                  `}
-                  onClick={() => setVoiceDetails({ ...voiceDetails, type: 'base' })}
-                >
-                  <span className={`text-sm font-medium ${voiceDetails.type === 'base' ? 'text-indigo-700' : 'text-gray-900'}`}>
-                    Base Voice
-                  </span>
-                </div>
-                <div
-                  className={`
-                    border rounded-lg p-4 cursor-pointer text-center transition-all
-                    ${voiceDetails.type === 'custom'
-                      ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-500'
-                      : 'border-gray-300 hover:border-indigo-400'
-                    }
-                  `}
-                  onClick={() => setVoiceDetails({ ...voiceDetails, type: 'custom' })}
-                >
-                  <span className={`text-sm font-medium ${voiceDetails.type === 'custom' ? 'text-indigo-700' : 'text-gray-900'}`}>
-                    Custom Voice
-                  </span>
-                </div>
-              </div>
-            </div>
+        {/* Voice Type Selection removed (unified type) */}
 
             <div>
               <label htmlFor="title" className="block text-sm font-medium text-gray-700">
