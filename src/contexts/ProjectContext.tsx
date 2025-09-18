@@ -29,7 +29,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     // Load projects from API
     const loadProjects = async () => {
       try {
-        const response = await fetch('/api/projects/list');
+        const response = await fetch('/api/projects/list', { cache: 'no-store' });
         const data = await response.json();
         if (data.projects) {
           setProjects(data.projects);
@@ -83,7 +83,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       if (data.success) {
         // Refresh full list to avoid duplicates and ensure source of truth
         try {
-          const listRes = await fetch('/api/projects/list');
+          const listRes = await fetch('/api/projects/list', { cache: 'no-store' });
           const listData: { projects?: Project[] } = await listRes.json();
           if (listData.projects) {
             // De-dupe by id

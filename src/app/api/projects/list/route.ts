@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 async function getGraphClient() {
   const credential = new ClientSecretCredential(
     process.env.AZURE_TENANT_ID as string,
@@ -52,10 +55,10 @@ export async function GET() {
     }));
 
     projects.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return NextResponse.json({ projects });
+    return NextResponse.json({ projects }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('Error listing Teams/SharePoint projects:', error);
-    return NextResponse.json({ error: 'Failed to list projects' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to list projects' }, { status: 500, headers: { 'Cache-Control': 'no-store' } });
   }
 }
 

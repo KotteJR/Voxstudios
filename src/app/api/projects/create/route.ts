@@ -54,6 +54,14 @@ export async function POST(request: NextRequest) {
         '@microsoft.graph.conflictBehavior': 'fail',
       });
 
+    // Small consistency delay + retry list to ensure Teams surfaces new folder (Vercel edge timing)
+    try {
+      await new Promise(res => setTimeout(res, 400));
+      await client
+        .api(`/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(projectName)}`)
+        .get();
+    } catch {}
+
     return NextResponse.json({ success: true, project: { id: projectName, name: projectName, createdAt: new Date().toISOString() } });
   } catch (error) {
     console.error('Error creating project in Teams:', error);
