@@ -140,6 +140,7 @@ export default function AdminDashboard() {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [voiceDetails, setVoiceDetails] = useState<VoiceDetails>({
@@ -294,49 +295,55 @@ export default function AdminDashboard() {
       return;
     }
 
-    // Check file size for Vercel limitations
-    const maxSize = 4.5 * 1024 * 1024; // 4.5MB in bytes
-    if (file.size > maxSize) {
-      setUploadError(
-        `File size (${formatFileSize(file.size)}) exceeds Vercel limit (4.5MB). ` +
-        'Please compress your video or use a different upload method.'
-      );
-      return;
-    }
-
     setIsUploading(true);
+    setUploadProgress(0);
     setUploadError(null);
     setUploadSuccess(false);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('projectName', currentProject.name); // Use projectName like other stages
-      formData.append('stage', 'stage4'); // Upload to stage4 like other stages
-      // Store like Stage 1: rely on file type to place under stage4/videos
-      // formData.append('folderName', 'videos'); // Optional explicit override
-
-      const response = await fetch('/api/upload', { // Use standard upload endpoint
+      // Create Graph upload session for stage4/videos
+      const sessionRes = await fetch('/api/upload/create-session', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectName: currentProject.name,
+          stage: 'stage4',
+          fileName: file.name,
+          fileSize: file.size,
+        }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Upload failed:', response.status, errorData);
-        
-        // Handle specific Vercel 413 error
-        if (response.status === 413) {
-          throw new Error(
-            'File too large for Vercel deployment. Please compress your video to under 4.5MB or use a different upload method.'
-          );
-        }
-        
-        throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+      if (!sessionRes.ok) {
+        const err = await sessionRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create upload session');
       }
+      const { uploadUrl } = await sessionRes.json();
 
-      const result = await response.json();
-      console.log('Upload successful:', result);
+      const chunkSize = 5 * 1024 * 1024; // 5MB
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      let offset = 0;
+      let chunkIndex = 0;
+      while (offset < file.size) {
+        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+        const chunkBuffer = await chunk.arrayBuffer();
+        const contentRange = `bytes ${offset}-${offset + chunkBuffer.byteLength - 1}/${file.size}`;
+        const putRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Length': String(chunkBuffer.byteLength),
+            'Content-Range': contentRange,
+          },
+          body: chunkBuffer,
+        });
+        if (!putRes.ok && putRes.status !== 202 && putRes.status !== 201) {
+          const errText = await putRes.text().catch(() => '');
+          throw new Error(`Chunk upload failed (${putRes.status}): ${errText}`);
+        }
+        chunkIndex += 1;
+        offset += chunkBuffer.byteLength;
+        setUploadProgress(Math.min(99, Math.round((chunkIndex / totalChunks) * 100)));
+      }
+      setUploadProgress(100);
+      console.log('Upload successful via session');
       setUploadSuccess(true);
       setVideoDetails(prev => ({ ...prev, title: '' }));
     } catch (error) {
@@ -624,7 +631,6 @@ export default function AdminDashboard() {
                       <p className="pl-1">or drag and drop</p>
                     </div>
                     <p className="text-xs text-gray-500">MP4, WebM, or other video formats</p>
-                    <p className="text-xs text-amber-600 font-medium">⚠️ Maximum file size: 4.5MB (Vercel limit)</p>
                   </div>
                 </div>
               </div>
