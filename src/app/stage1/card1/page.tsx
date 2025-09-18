@@ -50,23 +50,49 @@ export default function VideoUpload() {
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('projectName', currentProject.name);
-      formData.append('stage', 'stage1');
-
-      const response = await fetch('/api/upload', {
+      // 1) Create an upload session to bypass Vercel body size limits
+      const sessionRes = await fetch('/api/upload/create-session', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectName: currentProject.name,
+          stage: 'stage1',
+          fileName: file.name,
+          fileSize: file.size,
+        }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
+      if (!sessionRes.ok) {
+        const err = await sessionRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create upload session');
       }
+      const { uploadUrl } = await sessionRes.json();
 
-      const result = await response.json();
-      console.log('Upload successful:', result);
+      // 2) Upload in chunks directly to Graph
+      const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      let offset = 0;
+      let chunkIndex = 0;
+      while (offset < file.size) {
+        const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+        const chunkBuffer = await chunk.arrayBuffer();
+        const contentRange = `bytes ${offset}-${offset + chunkBuffer.byteLength - 1}/${file.size}`;
+        const putRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Length': String(chunkBuffer.byteLength),
+            'Content-Range': contentRange,
+          },
+          body: chunkBuffer,
+        });
+        if (!putRes.ok && putRes.status !== 202 && putRes.status !== 201) {
+          const errText = await putRes.text().catch(() => '');
+          throw new Error(`Chunk upload failed (${putRes.status}): ${errText}`);
+        }
+        chunkIndex += 1;
+        offset += chunkBuffer.byteLength;
+        setProgress(Math.min(99, Math.round((chunkIndex / totalChunks) * 100)));
+      }
+      setProgress(100);
 
       // Reset form
       setFile(null);
@@ -82,7 +108,6 @@ export default function VideoUpload() {
       setError(err instanceof Error ? err.message : 'Failed to upload video. Please try again.');
     } finally {
       setIsUploading(false);
-      setProgress(100);
     }
   };
 
