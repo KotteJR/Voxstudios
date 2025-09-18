@@ -23,6 +23,7 @@ export default function ProjectsPage() {
   const { projects, setProjects, setCurrentProject, createProject, loading } = useProject();
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -43,7 +44,8 @@ export default function ProjectsPage() {
     }
 
     try {
-      // Use the createProject function from context
+      if (creating) return;
+      setCreating(true);
       await createProject(newProjectName.trim());
       
       // Reset form and close modal
@@ -55,6 +57,8 @@ export default function ProjectsPage() {
     } catch (err) {
       console.error('Error creating project:', err);
       setError(err instanceof Error ? err.message : 'Failed to create project. Please try again.');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -145,9 +149,10 @@ export default function ProjectsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  disabled={creating}
+                  className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${creating ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'}`}
                 >
-                  Create
+                  {creating ? 'Creating…' : 'Create'}
                 </button>
               </div>
             </form>

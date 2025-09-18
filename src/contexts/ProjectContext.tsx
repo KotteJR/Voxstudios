@@ -81,7 +81,28 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json();
       
       if (data.success) {
-        setProjects(prev => [...prev, data.project]);
+        // Refresh full list to avoid duplicates and ensure source of truth
+        try {
+          const listRes = await fetch('/api/projects/list');
+          const listData: { projects?: Project[] } = await listRes.json();
+          if (listData.projects) {
+            // De-dupe by id
+            const deduped: Project[] = Array.from(new Map(listData.projects.map((p: Project) => [p.id, p])).values());
+            setProjects(deduped);
+          } else {
+            setProjects(prev => {
+              const map = new Map<string, Project>(prev.map(p => [p.id, p]));
+              map.set(data.project.id, data.project as Project);
+              return Array.from(map.values());
+            });
+          }
+        } catch {
+          setProjects(prev => {
+            const map = new Map<string, Project>(prev.map(p => [p.id, p]));
+            map.set(data.project.id, data.project as Project);
+            return Array.from(map.values());
+          });
+        }
         setCurrentProject(data.project);
       } else {
         throw new Error(data.error || 'Failed to create project');

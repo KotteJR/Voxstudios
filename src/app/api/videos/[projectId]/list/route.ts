@@ -41,9 +41,9 @@ export async function GET(
       try {
         const publicUploadsPath = path.join(process.cwd(), 'public', 'uploads');
         
-        // Try new structure first: {projectId}/stage4/final-videos
-        let videosPath = path.join(publicUploadsPath, projectId, 'stage4', 'final-videos');
-        let videoUrlPrefix = `/uploads/${projectId}/stage4/final-videos`;
+        // Try new structure first: {projectId}/stage4/videos (align with Stage 1)
+        let videosPath = path.join(publicUploadsPath, projectId, 'stage4', 'videos');
+        let videoUrlPrefix = `/uploads/${projectId}/stage4/videos`;
         
         try {
           const files = await readdir(videosPath);
@@ -106,8 +106,8 @@ export async function GET(
         return NextResponse.json({ error: 'No document library found on site' }, { status: 500 });
       }
 
-      // Get videos from SharePoint stage4/final-videos folder
-      const folderPath = `/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(projectId)}/stage4/final-videos`;
+      // Get videos from SharePoint stage4/videos folder (align with Stage 1)
+      const folderPath = `/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(projectId)}/stage4/videos`;
       
       try {
         const children = await client
@@ -124,7 +124,7 @@ export async function GET(
           })
           .map((item: any) => ({
             name: item.name,
-            url: `/api/video-proxy?filePath=${encodeURIComponent(`${projectId}/stage4/final-videos/${item.name}`)}&siteId=${site.id}&driveId=${driveId}`,
+            url: `/api/video-proxy?filePath=${encodeURIComponent(`${projectId}/stage4/videos/${item.name}`)}&siteId=${site.id}&driveId=${driveId}`,
             webUrl: item.webUrl,
             size: item.size
           }));

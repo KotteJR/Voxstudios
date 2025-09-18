@@ -25,9 +25,25 @@ export async function POST(request: NextRequest) {
       .api('/sites/adamass.sharepoint.com:/sites/VoxStudiosplatform')
       .get();
     const drives = await client.api(`/sites/${site.id}/drives`).get();
-    const driveId = drives?.value?.[0]?.id;
+    // Prefer the default document library (commonly named "Documents" or "Shared Documents")
+    const preferredDrive = (drives?.value || []).find((d: any) =>
+      /documents/i.test(d.name || '') || /shared documents/i.test(d.name || '')
+    ) || drives?.value?.[0];
+    const driveId = preferredDrive?.id;
     if (!driveId) {
       return NextResponse.json({ error: 'No document library found on site' }, { status: 500 });
+    }
+
+    // Idempotency: check if folder already exists; if so, return success with existing
+    try {
+      const existing = await client
+        .api(`/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(projectName)}`)
+        .get();
+      if (existing?.id) {
+        return NextResponse.json({ success: true, project: { id: projectName, name: projectName, createdAt: existing.createdDateTime || new Date().toISOString() } });
+      }
+    } catch {
+      // 404 means it doesn't exist; proceed to create
     }
 
     await client
@@ -35,7 +51,7 @@ export async function POST(request: NextRequest) {
       .post({
         name: projectName,
         folder: {},
-        '@microsoft.graph.conflictBehavior': 'replace',
+        '@microsoft.graph.conflictBehavior': 'fail',
       });
 
     return NextResponse.json({ success: true, project: { id: projectName, name: projectName, createdAt: new Date().toISOString() } });

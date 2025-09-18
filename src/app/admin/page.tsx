@@ -313,7 +313,8 @@ export default function AdminDashboard() {
       formData.append('file', file);
       formData.append('projectName', currentProject.name); // Use projectName like other stages
       formData.append('stage', 'stage4'); // Upload to stage4 like other stages
-      formData.append('folderName', 'final-videos'); // Specify folder name
+      // Store like Stage 1: rely on file type to place under stage4/videos
+      // formData.append('folderName', 'videos'); // Optional explicit override
 
       const response = await fetch('/api/upload', { // Use standard upload endpoint
         method: 'POST',

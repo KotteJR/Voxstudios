@@ -20,18 +20,31 @@ export async function GET() {
       .api('/sites/adamass.sharepoint.com:/sites/VoxStudiosplatform')
       .get();
     const drives = await client.api(`/sites/${site.id}/drives`).get();
-    const driveId = drives?.value?.[0]?.id;
+    const preferredDrive = (drives?.value || []).find((d: any) =>
+      /documents/i.test(d.name || '') || /shared documents/i.test(d.name || '')
+    ) || drives?.value?.[0];
+    const driveId = preferredDrive?.id;
     if (!driveId) {
       return NextResponse.json({ error: 'No document library found on site' }, { status: 500 });
     }
 
-    const children = await client
+    // Page through children to ensure we get all project folders
+    let items: any[] = [];
+    let request = client
       .api(`/sites/${site.id}/drives/${driveId}/root/children`)
       .select('id,name,folder,createdDateTime')
-      .top(999)
-      .get();
+      .top(200);
 
-    const folders = (children.value || []).filter((item: any) => item.folder);
+    // First page
+    let page = await request.get();
+    items = items.concat(page.value || []);
+    // Next pages
+    while (page['@odata.nextLink']) {
+      page = await client.api(page['@odata.nextLink']).get();
+      items = items.concat(page.value || []);
+    }
+
+    const folders = items.filter((item: any) => item.folder);
     const projects = folders.map((item: any) => ({
       id: item.name,
       name: item.name,
