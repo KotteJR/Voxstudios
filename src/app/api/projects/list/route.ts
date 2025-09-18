@@ -47,7 +47,11 @@ export async function GET() {
       items = items.concat(page.value || []);
     }
 
-    const folders = items.filter((item: any) => item.folder);
+    const reserved = new Set([
+      'stage1', 'stage2', 'stage3', 'stage4',
+      'videos', 'voices', 'documents', 'voice-feedback', 'AI-voices'
+    ]);
+    const folders = items.filter((item: any) => item.folder && !reserved.has(item.name));
     const projects = folders.map((item: any) => ({
       id: item.name,
       name: item.name,

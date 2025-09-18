@@ -16,22 +16,37 @@ async function getGraphClient() {
   return Client.init({ authProvider: (done) => done(null, token.token) });
 }
 
-async function ensureFolderPath(client: Client, siteId: string, driveId: string, segments: string[]) {
-  let currentPath = '';
-  for (const segment of segments) {
-    currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+async function ensureFolderPathAndGetId(client: Client, siteId: string, driveId: string, segments: string[]): Promise<string> {
+  let parentPathEncoded = '';
+  let parentId: string | null = null;
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    const currentPathEncoded = parentPathEncoded
+      ? `${parentPathEncoded}/${encodeURIComponent(segment)}`
+      : encodeURIComponent(segment);
     try {
-      await client.api(`/sites/${siteId}/drives/${driveId}/root:/${encodeURIComponent(currentPath)}`).get();
+      const existing = await client
+        .api(`/sites/${siteId}/drives/${driveId}/root:/${currentPathEncoded}`)
+        .get();
+      parentId = existing.id;
+      parentPathEncoded = currentPathEncoded;
     } catch {
-      await client
-        .api(`/sites/${siteId}/drives/${driveId}/root/children`)
+      const childrenApi = parentPathEncoded
+        ? `/sites/${siteId}/drives/${driveId}/root:/${parentPathEncoded}:/children`
+        : `/sites/${siteId}/drives/${driveId}/root/children`;
+      const created = await client
+        .api(childrenApi)
         .post({
           name: segment,
           folder: {},
           '@microsoft.graph.conflictBehavior': 'fail',
         });
+      parentId = created.id;
+      parentPathEncoded = currentPathEncoded;
     }
   }
+  if (!parentId) throw new Error('Failed to resolve or create parent folder');
+  return parentId;
 }
 
 export async function POST(request: NextRequest) {
@@ -53,26 +68,23 @@ export async function POST(request: NextRequest) {
     const driveId = preferredDrive?.id;
     if (!driveId) return NextResponse.json({ error: 'No document library found on site' }, { status: 500 });
 
-    // Build folder path similar to Stage 1: {project}/{stage}/videos
+    // Resolve parent folder id: {project}/{stage}/videos
     const folderSegments = [projectName, stage, 'videos'];
-    await ensureFolderPath(client, site.id, driveId, folderSegments);
-
-    const itemPath = `${folderSegments.join('/')}/${fileName}`;
+    const parentId = await ensureFolderPathAndGetId(client, site.id, driveId, folderSegments);
 
     const session = await client
-      .api(`/sites/${site.id}/drives/${driveId}/root:/${encodeURIComponent(itemPath)}:/createUploadSession`)
+      .api(`/sites/${site.id}/drives/${driveId}/items/${parentId}:/${encodeURIComponent(fileName)}:/createUploadSession`)
       .post({
         item: {
-          '@microsoft.graph.conflictBehavior': 'replace',
+          '@microsoft.graph.conflictBehavior': 'rename',
           name: fileName,
-          fileSize,
         },
       });
 
     return NextResponse.json({ uploadUrl: session.uploadUrl, expirationDateTime: session.expirationDateTime });
   } catch (error) {
     console.error('Error creating upload session:', error);
-    return NextResponse.json({ error: 'Failed to create upload session' }, { status: 500 });
+    return NextResponse.json({ error: (error as Error).message || 'Failed to create upload session' }, { status: 500 });
   }
 }
 
