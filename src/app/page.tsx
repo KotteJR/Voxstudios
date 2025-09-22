@@ -75,21 +75,21 @@ const initialStages: Stage[] = [
   },
   {
     id: 3,
-    title: 'Stage 3: Voice Selection',
+    title: 'Stage 3: Voices',
     description: 'Review and select voice options',
     href: '/stage3/dashboard',
     status: 'pending',
     steps: [
       {
-        title: 'Base Voice Selection',
-        description: 'Choose your preferred base voice',
-        component: 'BaseVoiceSelection',
+        title: 'Voices',
+        description: 'Review and select voice options',
+        component: 'VoiceSelection',
         status: 'pending'
       },
       {
-        title: 'Custom Voice Selection',
-        description: 'Review and select custom voice options',
-        component: 'CustomVoiceSelection',
+        title: 'Iterated Voices',
+        description: 'Review iterated voices uploaded by admin',
+        component: 'IteratedVoices',
         status: 'pending'
       }
     ]
@@ -270,24 +270,7 @@ export default function HomePage() {
                             <div className="flex-1">
                               <h3 className="text-lg font-medium text-gray-900">{step.title}</h3>
                               <p className="mt-1 text-sm text-gray-600">{step.description}</p>
-                              {/* Uploaded assets indicator */}
-                              <div className="mt-3 flex flex-wrap gap-3 text-sm">
-                                {step.component === 'VideoUpload' && (
-                                  <div className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-700">
-                                    {filesByCategory.videos.length > 0 ? `${filesByCategory.videos.length} video(s) uploaded` : 'No videos yet'}
-                                  </div>
-                                )}
-                                {step.component?.toLowerCase().includes('voice') && (
-                                  <div className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-700">
-                                    {filesByCategory.voices.length > 0 ? `${filesByCategory.voices.length} audio file(s) uploaded` : 'No audio yet'}
-                                  </div>
-                                )}
-                                {step.component?.toLowerCase().includes('script') && (
-                                  <div className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-700">
-                                    {filesByCategory.documents.length > 0 ? `${filesByCategory.documents.length} document(s) uploaded` : 'No documents yet'}
-                                  </div>
-                                )}
-                              </div>
+                              {/* Simplified: no uploaded assets indicator */}
                             </div>
                             <div className="flex items-center gap-4">
                               <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusStyle(step.status)}`}>

@@ -15,20 +15,19 @@ interface Step {
 
 const initialSteps: Step[] = [
   {
-    id: 'base-voices',
-    name: 'Base Voice Selection',
-    description: 'Review and select base voice options',
+    id: 'voices',
+    name: 'Voices',
+    description: 'Review and select voice options',
     status: 'in_progress',
     href: '/stage3/card1'
   },
   {
-    id: 'custom-voices',
-    name: 'Custom Voice Selection',
-    description: 'Review and select custom voice options',
+    id: 'iterated-voices',
+    name: 'Iterated Voices',
+    description: 'Review iterated voices uploaded by admin',
     status: 'in_progress',
     href: '/stage3/card2'
   },
-
 ];
 
 export default function Stage3Dashboard() {
